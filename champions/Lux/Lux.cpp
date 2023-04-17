@@ -207,16 +207,6 @@ void Lux::OnDraw()
 		);
 	}
 
-	for (const auto& particle : PredictionHelper::GetInstance()->specialDashs)
-	{
-		draw_manager->add_circle(particle.second.dash_end, 15.f, D3DCOLOR_ARGB(255, 255, 255, 255));
-		draw_manager->add_line(
-			particle.second.dash_start,
-			particle.second.dash_end,
-			D3DCOLOR_ARGB(255, 255, 255, 255)
-		);
-	}
-
 	// Draw R Polygon
 	if (this->r_data.object && this->r_data.object->is_valid())
 	{
@@ -526,19 +516,17 @@ void Lux::AutomaticCastComboOnSpecialDash()
 	const auto& range = this->spells.q->is_ready() ? this->spells.q->range() : this->spells.e->range() + this->spells.e->get_radius();
 	
 	const auto& enemy = this->GetTarget(range, damage_type::physical, [&](game_object_script target) {
-		const std::vector<SpecialDashData> dashs = PredictionHelper::GetInstance()->GetSpecialDash(target);
-		if (dashs.size() <= 0)
-			return false;
-
-		return std::any_of(dashs.begin(), dashs.end(), [&](const SpecialDashData& dash) {
-			return dash.dash_end.distance(target->get_position()) <= range;
-		});
+		const auto& dash = PredictionHelper::GetInstance()->GetSpecialDash(target, range + target->get_bounding_radius());
+		return dash;
 	});
 
 	if (!enemy || !enemy->is_valid())
 		return;
-
-	const SpecialDashData dash = PredictionHelper::GetInstance()->GetSpecialDash(enemy)[0];
+	
+	const auto& dash = PredictionHelper::GetInstance()->GetSpecialDash(enemy);
+	if (!dash)
+		return;
+	
 	bool CanCastEBeforeQ = this->spells.q->is_ready() ?
 		PredictionHelper::GetInstance()->CanCastOnSpecialDash(this->spells.q, dash, this->spells.e->get_delay())
 		: true;
@@ -546,9 +534,9 @@ void Lux::AutomaticCastComboOnSpecialDash()
 	const auto& eRange = this->spells.e->range() + this->spells.e->get_radius();
 	if (CanCastEBeforeQ)
 	{
-		if (this->spells.e->is_ready() && this->GetSingularityState() == 0 && dash.dash_end.distance(myhero) <= eRange)
+		if (this->spells.e->is_ready() && this->GetSingularityState() == 0 && dash->dash_end.distance(myhero) <= eRange)
 		{
-			myhero->cast_spell(spellslot::e, dash.dash_end);
+			myhero->cast_spell(spellslot::e, dash->dash_end);
 		}
 	}
 
@@ -556,8 +544,9 @@ void Lux::AutomaticCastComboOnSpecialDash()
 	{
 		const auto& qPrediction = PredictionHelper::GetInstance()->GetCastPositionOnSpecialDash(this->spells.q, dash, 2);
 		if (qPrediction.first)
+		{
 			this->spells.q->cast(qPrediction.second);
-		
+		}
 		return;
 	}
 
