@@ -154,7 +154,7 @@ protected:
 		return target_selector->get_target(targets, type);
 	}
 
-	std::pair<game_object_script, prediction_output> GetTarget(script_spell* spell, damage_type type, hit_chance hitchance)
+	std::pair<game_object_script, prediction_output> GetTarget(script_spell* spell, damage_type type, hit_chance hitchance, std::function<bool(game_object_script target)>validation = [](game_object_script target) { return true;  })
 	{
 		const auto& selectedTarget = this->GetSelectedTarget();
 		if (selectedTarget) {
@@ -170,6 +170,9 @@ protected:
 				continue;
 
 			if (spell->range() != FLT_MAX && enemy->get_position().distance(myhero->get_position()) > spell->range())
+				continue;
+
+			if (!validation(enemy))
 				continue;
 			
 			auto output = spell->get_prediction(enemy);

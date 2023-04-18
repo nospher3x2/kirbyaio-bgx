@@ -22,7 +22,7 @@ public:
 	*/
 	int GetSingularityState();
 	bool HasPassive(game_object_script target);
-	bool QWillHit(game_object_script target);
+	bool IsDashable(game_object_script target);
 
 	/*
 	* Logics
@@ -86,7 +86,7 @@ protected:
 		
 		TreeEntry* wait_dash_for_use_q = nullptr;
 		std::map<champion_id, 
-			std::vector<std::pair<spellslot, TreeEntry*>>
+			std::vector<std::pair<SpellDash, TreeEntry*>>
 		> q_dash_whitelist = {};
 		TreeEntry* ignore_whitelist_if_key_pressed = nullptr;
 		TreeEntry* ignore_whitelist_if_slow = nullptr;

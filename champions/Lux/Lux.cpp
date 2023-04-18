@@ -5,9 +5,9 @@ void Lux::Load()
 {
 	DashDatabase::load();
 	
-	this->main = menu->create_tab("yess_lux", "[TokyoSz] Lux");
+	this->main = menu->create_tab("kirby_lux", "[KirbyAIO] Lux");
 	this->main->set_assigned_texture(myhero->get_square_icon_portrait());
-	this->main->add_separator("header", "[TokyoSz] Lux ~ 1.0");
+	this->main->add_separator("header", "[KirbyAIO] Lux ~ 1.0");
 	
 	auto const combo = this->main->add_tab("combo", "Combo");
 	{
@@ -33,7 +33,7 @@ void Lux::Load()
 						{
 							for (auto const& dash : dashs)
 							{
-								this->combo.q_dash_whitelist[enemy->get_champion()].emplace_back(dash.slot, tab->add_checkbox(dash.name, dash.name, dash.enabledDefault));
+								this->combo.q_dash_whitelist[enemy->get_champion()].emplace_back(dash, tab->add_checkbox(dash.name, dash.name, dash.enabledDefault));
 								this->combo.q_dash_whitelist[enemy->get_champion()].back().second->set_texture(enemy->get_spell(dash.slot)->get_icon_texture());
 							}
 						}
@@ -372,12 +372,39 @@ bool Lux::HasPassive(game_object_script target)
 	return target->has_buff(buff_hash("LuxIlluminatingFraulein"));
 }
 
+bool Lux::IsDashable(game_object_script target)
+{
+	if (this->combo.ignore_whitelist_if_key_pressed->get_bool())
+		return false;
+	
+	auto it = this->combo.q_dash_whitelist.find(target->get_champion());
+	if (it == this->combo.q_dash_whitelist.end())
+		return false;
+
+	for (auto& pair : it->second)
+	{
+		if (pair.second->get_bool() == false)
+			continue;
+		
+		if (target->get_spell_state(pair.first.slot) != spell_state::Ready)
+			continue;
+		
+		if (pair.first.canCast(target))
+			return true;
+	}
+
+	return false;
+}
+
 bool Lux::CastQ()
 {
 	if (!this->spells.q->is_ready())
 		return false;
 
-	std::pair<game_object_script, prediction_output> target_prediction = this->GetTarget(this->spells.q, damage_type::magical, hit_chance::low);
+	std::pair<game_object_script, prediction_output> target_prediction = this->GetTarget(this->spells.q, damage_type::magical, hit_chance::low, [&](game_object_script target)
+		{
+			return !this->IsDashable(target);
+		});
 	if (!target_prediction.first || !target_prediction.first->is_valid())
 		return false;
 	
