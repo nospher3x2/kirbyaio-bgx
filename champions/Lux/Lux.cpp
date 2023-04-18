@@ -3,6 +3,8 @@
 
 void Lux::Load()
 {
+	DashDatabase::load();
+	
 	this->main = menu->create_tab("yess_lux", "[TokyoSz] Lux");
 	this->main->set_assigned_texture(myhero->get_square_icon_portrait());
 	this->main->add_separator("header", "[TokyoSz] Lux ~ 1.0");
@@ -12,8 +14,35 @@ void Lux::Load()
 		combo->add_separator("q_settings", "[Q] Settings");
 		{
 			this->combo.use_q = combo->add_checkbox("use_q", "Use Q", true);
-			this->combo.use_invisible_q = combo->add_checkbox("use_invisible_q", "Try Invisible Q (W After)", true);
-			this->combo.use_collision_q = combo->add_checkbox("q_collision", "Try Q Collision on Minion", true);
+			this->combo.use_invisible_q = combo->add_checkbox("use_invisible_q", "Use Invisible Q (W After)", true);
+			this->combo.use_collision_q = combo->add_checkbox("q_collision", "Use Q Collision on Minion Logic", true);
+			
+			this->combo.wait_dash_for_use_q = combo->add_checkbox("wait_dash_for_use_q", "Dont use Q if enemy has dash", true);
+			const auto& dash_database = combo->add_tab("dash_database", " ^~ Dash Database");
+			{
+				dash_database->add_separator("header", "Enemy Dash Database");
+				const auto& enemies = entitylist->get_enemy_heroes();
+				for (auto const& enemy : enemies)
+				{
+					const auto& dashs = DashDatabase::getDashes(enemy->get_champion());
+					if (dashs.size() > 0)
+					{
+						const auto& tab = dash_database->add_tab(enemy->get_model(), enemy->get_model());
+						tab->set_assigned_texture(enemy->get_square_icon_portrait());
+						tab->add_separator("champ", enemy->get_model());
+						{
+							for (auto const& dash : dashs)
+							{
+								this->combo.q_dash_whitelist[enemy->get_champion()].emplace_back(dash.slot, tab->add_checkbox(dash.name, dash.name, dash.enabledDefault));
+								this->combo.q_dash_whitelist[enemy->get_champion()].back().second->set_texture(enemy->get_spell(dash.slot)->get_icon_texture());
+							}
+						}
+					}
+				}
+				dash_database->add_separator("missing", "If you want to add a dash, please contact me on discord.");
+			}
+			this->combo.ignore_whitelist_if_key_pressed = combo->add_hotkey("ignore_whitelist_if_key_pressed", " ^~ Ignore Dash", TreeHotkeyMode::Hold, 0x1, false);
+			this->combo.ignore_whitelist_if_slow = combo->add_checkbox("ignore_whitelist_if_slow", " ^~ Ignore Dash if Slowed", false);
 		}
 
 		combo->add_separator("w_settings", "[W] Settings");
@@ -269,17 +298,18 @@ void Lux::OnCreateObject(game_object_script object)
 		this->r_data.object = object;
 		this->r_data.line = geometry::rectangle(myhero->get_position(), endPosition, 100).to_polygon();
 		this->r_data.castedAt = gametime->get_time();
+		return;
 	}
 
 	if (object->is_missile() && object->missile_is_targeted() && object->missile_get_sender_id() == myhero->get_id())
 	{
 		const auto& target = entitylist->get_object(object->missile_get_target_id());
-		if (target->is_ai_hero() && (object->get_name() == ("LuxBasicAttack") || object->get_name() == ("LuxBasicAttack2")))
+		const auto& hash = object->get_missile_sdata()->get_name_hash();
+		if (target->is_ai_hero() && (hash == spell_hash("LuxBasicAttack") || hash == spell_hash("LuxBasicAttack2")))
 		{
 			this->attack.missile = object;
 			this->attack.target = target;
 		}
-			
 		return;
 	}
 }
@@ -334,7 +364,7 @@ void Lux::OnCastSpell(spellslot slot, game_object_script target, vector& positio
 
 int Lux::GetSingularityState()
 {
-	return this->spells.e->toogle_state();
+	return myhero->get_spell(spellslot::e)->get_name_hash() == spell_hash("LuxLightStrikeToggle");
 }
 
 bool Lux::HasPassive(game_object_script target)
@@ -446,7 +476,7 @@ void Lux::AutomaticCastE2()
 	for (const auto& enemy : enemies)
 	{
 		// Auto Cast if enemy is leaving
-		prediction_output output = prediction->get_prediction(enemy, ping->get_ping() / 1000 + (1.f / 15.f), 305.f);
+		prediction_output output = prediction->get_prediction(enemy, ping->get_ping() / 1000 + (1.f / 15.f));
 		if (this->e_data.circle.is_outside(output.get_unit_position()) && this->spells.e->cast())
 			return;
 
@@ -495,7 +525,6 @@ void Lux::AutomaticCastUltimate()
 	if (!this->spells.r->is_ready())
 		return; 
 
-
 	const auto& enemies = this->GetTargets(this->spells.r->range());
 	if (enemies.size() <= 0)
 		return;
@@ -524,7 +553,7 @@ void Lux::AutomaticCastComboOnSpecialDash()
 		return;
 	
 	const auto& dash = PredictionHelper::GetInstance()->GetSpecialDash(enemy);
-	if (!dash)
+	if (!dash) 
 		return;
 	
 	bool CanCastEBeforeQ = this->spells.q->is_ready() ?
@@ -532,11 +561,11 @@ void Lux::AutomaticCastComboOnSpecialDash()
 		: true;
 	
 	const auto& eRange = this->spells.e->range() + this->spells.e->get_radius();
-	if (CanCastEBeforeQ)
+	if (CanCastEBeforeQ && this->spells.e->is_ready() && this->GetSingularityState() == 0)
 	{
-		if (this->spells.e->is_ready() && this->GetSingularityState() == 0 && dash->dash_end.distance(myhero) <= eRange)
+		if (dash->endPosition.distance(myhero) <= eRange)
 		{
-			myhero->cast_spell(spellslot::e, dash->dash_end);
+			myhero->cast_spell(spellslot::e, dash->endPosition);
 		}
 	}
 
@@ -547,15 +576,18 @@ void Lux::AutomaticCastComboOnSpecialDash()
 		{
 			this->spells.q->cast(qPrediction.second);
 		}
-		return;
 	}
 
-	if (this->spells.r->is_ready())
+	
+	if (!this->spells.q->is_ready() && !this->spells.e->is_ready() && this->spells.r->is_ready())
 	{
 		const auto& rPrediction = PredictionHelper::GetInstance()->GetCastPositionOnSpecialDash(this->spells.r, dash, 0);
 		if (rPrediction.first)
 		{
-			this->spells.r->cast(rPrediction.second);
+			if (this->spells.r->cast(rPrediction.second))
+			{
+				myhero->print_chat(0x1, "R1");
+			}
 		}
 	}
 }

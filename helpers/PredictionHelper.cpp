@@ -17,145 +17,85 @@ PredictionHelper::PredictionHelper()
 
 };
 
-SpecialDashData* PredictionHelper::GetSpecialDash(game_object_script enemy, float range)
-{
-	for (const auto& [hash, data] : this->specialDashs)
-	{
-		if (!data->origin || !data->origin->is_valid())
-			continue;
-		
-		if (data->origin->get_network_id() == enemy->get_network_id())
-		{
-			if (range > 0 && data->dash_start.distance(data->dash_end) > range)
-				continue;
-			
-			return data.get();
-		}
-	}
+SpecialDashData* PredictionHelper::GetSpecialDash(game_object_script enemy, float range) {
+	auto it = std::find_if(this->specialDashs.begin(), this->specialDashs.end(),
+		[&](const std::pair<uint32_t, std::shared_ptr<SpecialDashData>>& entry) {
+			const auto& dash = entry.second;
+			if (!dash->origin || !dash->origin->is_valid()) {
+				return false;
+			}
 
-	return nullptr;
+			if (range > 0 && dash->startPosition.distance(dash->endPosition) > range) {
+				return false;
+			}
+
+			return dash->origin->get_network_id() == enemy->get_network_id();
+		});
+
+	return it != this->specialDashs.end() ? it->second.get() : nullptr;
+}
+
+bool PredictionHelper::CanCastOnSpecialDash(script_spell* spell, SpecialDashData* dash, float extraDelay)
+{
+	float travelTime = dash->castTime + dash->startPosition.distance(dash->endPosition) / dash->speed;
+	float endTime = dash->startTime + travelTime;
+	float timeToHit = myhero->get_position().distance(dash->endPosition) / spell->get_speed() + (ping->get_ping() / 2000.f) + spell->get_delay() + (extraDelay > 0 ? extraDelay + ping->get_ping() / 2000.f : 0.f) + gametime->get_time();
+
+	return endTime > timeToHit;
 }
 
 std::pair<bool, vector> PredictionHelper::GetCastPositionOnSpecialDash(script_spell* spell, SpecialDashData* dash, int maxCollisions)
 {
 	std::pair<bool, vector> output = std::make_pair(false, vector{});
-	bool hit_other = false;
+	
+	float travelTime = dash->castTime + dash->startPosition.distance(dash->endPosition) / dash->speed;
+	float endTime = dash->startTime + travelTime;
+	if (gametime->get_time() > endTime)
+	{
+		auto it = std::find_if(this->specialDashs.begin(), this->specialDashs.end(),
+			[&](const std::pair<uint32_t, std::shared_ptr<SpecialDashData>>& item) {
+				return item.second.get() == dash;
+			});
+
+		if (it != this->specialDashs.end()) {
+			this->specialDashs.erase(it);
+		}
+		return output;
+	}
+
 	bool isZoe = dash->origin->get_champion() == champion_id::Zoe;
-
-	float travelTime = dash->cast_time + dash->dash_start.distance(dash->dash_end) / dash->dash_speed;
 	float maxDistance = !isZoe ? (dash->origin->get_bounding_radius() + spell->get_radius()) / dash->origin->get_move_speed() : 0.75f;
-	float endTime = dash->dash_start_time + travelTime;
-
-	float timeToHit = myhero->get_position().distance(dash->dash_end) / spell->get_speed() + (ping->get_ping() / 1000.f) / 2 + spell->get_delay() + gametime->get_time();
+	float timeToHit = myhero->get_position().distance(dash->endPosition) / spell->get_speed() + (ping->get_ping() / 1000.f) / 2 + spell->get_delay() + gametime->get_time();
 
 	float waitTime = endTime - timeToHit;
 	float waitLimit = !isZoe ? waitTime + maxDistance / 1.5f : waitTime + maxDistance;
 	if (waitLimit > 0 && waitTime <= 0) {
-		std::vector<game_object_script> colisions = spell->get_collision(myhero->get_position(), { dash->dash_end });
-		//if (!colisions.empty()) {
-		//	for (auto& colision : colisions) {
-		//		if (colision != data.origin) {
-		//			hit_other = true;
-		//			break;
-		//		}
-		//	}
-		//}
+		if (maxCollisions > 0)
+		{
+			std::vector<game_object_script> collisions = spell->get_collision(myhero->get_position(), { dash->endPosition });
+			const auto& collisionCount = std::count_if(collisions.begin(), collisions.end(), [&](game_object_script object) {
+				return object->get_network_id() != dash->origin->get_network_id();
+			});
 
-		if (!hit_other) {
-			output.first = true;
-			output.second = dash->dash_end;
-			return output;
+			if (collisionCount > maxCollisions)
+				return output;
 		}
-	}
-	else if (endTime <= gametime->get_time()) {
-		console->print("deletado pq mt old");
-		for (auto it = this->specialDashs.begin(); it != this->specialDashs.end(); ++it) {
-			if (it->second->dash_start_time == dash->dash_start_time
-				&& it->second->origin->get_network_id() == dash->origin->get_network_id()) {
-				this->specialDashs.erase(it);
-				break;
-			}
-		};
+		
+		output.first = true;
+		output.second = dash->endPosition;
+		return output;
 	}
 	
 	return output;
 }
 
-bool PredictionHelper::CanCastOnSpecialDash(script_spell* spell, SpecialDashData* dash, float extraDelay)
-{
-	float travelTime = dash->cast_time + dash->dash_start.distance(dash->dash_end) / dash->dash_speed;
-	float endTime = dash->dash_start_time + travelTime;
-	float timeToHit = myhero->get_position().distance(dash->dash_end) / spell->get_speed() + (ping->get_ping() / 2000.f) + spell->get_delay() + (extraDelay > 0 ? extraDelay + ping->get_ping()/2000.f : 0.f) + gametime->get_time();
-	
-	return endTime > timeToHit;
-}
-
 std::pair<bool, vector> PredictionHelper::GetExpectedPosition(game_object_script object, float delay)
 {
-	//auto tracker = this->miaTracker.find(object->get_network_id());
-	//if (tracker == miaTracker.end())
-	//{
-	//	miaTracker[object->get_network_id()] = {
-	//		gametime->get_time(),
-	//		object->get_position()
-	//	};
-	//	
-	//	tracker = miaTracker.find(object->get_network_id());
-	//}
-	//
-	//if (object->is_visible())
-	//{
-	//	tracker->second.lastSeen = gametime->get_time();
-	//	tracker->second.lastSeenPosition = object->get_position();
-	//}
-	//
-	//auto const& lastSeenTime = gametime->get_time() - tracker->second.lastSeen;
-	//if (lastSeenTime > 0.3f) {
-	//	return std::make_pair(false, vector(0, 0, 0));
-	//}
-	//
-	//const auto& pathController = object->get_path_controller();
-	//if (pathController->get_path().empty()) {
-	//	const auto& positionExpected = object->get_position() + (object->get_velocity() * (delay + lastSeenTime));
-	//	return std::make_pair(true, positionExpected);
-	//};
-	//
-	//const auto& path = pathController->get_path();
-	//const auto& lastPath = path[path.size() - 1];
-	//
-	//auto const& lastSeenPosition = tracker->second.lastSeenPosition;
-	//
-	//auto const& timeToLastPath = (lastPath - lastSeenPosition) / lastSeenTime;
-	//auto const& positionExpected = lastSeenPosition + (timeToLastPath * (delay + lastSeenTime));
-	//
-	//return std::make_pair(true, positionExpected);
-}
-
-std::pair<bool, vector> PredictionHelper::GetCastPositionOnSpecialBuff(script_spell* spell, game_object_script target, int maxCollisions)
-{
-	
+	return std::make_pair(false, vector{});
 }
 
 void PredictionHelper::OnUpdate()
 {
-	// MIA TRACKER
-	//for (const auto& [networkId, data] : this->miaTracker)
-	//{
-	//	auto const& object = entitylist->get_object_by_network_id(networkId);
-	//	if (object == nullptr)
-	//	{
-	//		this->miaTracker.erase(networkId);
-	//		continue;
-	//	}
-	//
-	//	if (object->is_visible())
-	//	{
-	//		this->miaTracker[networkId] = {
-	//			gametime->get_time(),
-	//			object->get_position()
-	//		);
-	//	}
-	//}
 }
 
 void PredictionHelper::OnCreateObject(game_object_script object)
@@ -178,7 +118,7 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 	}
 	case buff_hash("Ekko_R_ChargeIndicator"):
 	{
-		this->specialDashs[emitterHash] = std::make_unique<SpecialDashData>(
+		this->specialDashs[emitterHash] = std::make_shared<SpecialDashData>(
 			emitterPosition,
 			particlePosition,
 			FLT_MAX,
@@ -190,7 +130,7 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 	}
 	case buff_hash("Evelynn_R_Landing"):
 	{
-		this->specialDashs[emitterHash] = std::make_unique<SpecialDashData>(
+		this->specialDashs[emitterHash] = std::make_shared<SpecialDashData>(
 			emitterPosition,
 			particlePosition,
 			FLT_MAX,
@@ -203,7 +143,7 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 	case buff_hash("Pantheon_R_Update_Indicator_Enemy"):
 	{
 		const auto& castPosition = object->get_position() + object->get_particle_rotation_forward() * 1350;
-		this->specialDashs[emitterHash] = std::make_unique<SpecialDashData>(
+		this->specialDashs[emitterHash] = std::make_shared<SpecialDashData>(
 			emitterPosition,
 			castPosition,
 			FLT_MAX,
@@ -215,7 +155,7 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 	}
 	case buff_hash("Galio_R_Tar_Ground_Enemy"):
 	{
-		this->specialDashs[emitterHash] = std::make_unique<SpecialDashData>(
+		this->specialDashs[emitterHash] = std::make_shared<SpecialDashData>(
 			emitterPosition,
 			particlePosition,
 			FLT_MAX,
@@ -227,7 +167,7 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 	}
 	case buff_hash("TahmKench_W_ImpactWarning_Enemy"):
 	{
-		this->specialDashs[emitterHash] = std::make_unique<SpecialDashData>(
+		this->specialDashs[emitterHash] = std::make_shared<SpecialDashData>(
 			emitterPosition,
 			particlePosition,
 			FLT_MAX,
@@ -288,7 +228,7 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 			}
 		}
 
-		this->specialDashs[emitterHash] = std::make_unique<SpecialDashData>(
+		this->specialDashs[emitterHash] = std::make_shared<SpecialDashData>(
 			emitterPosition,
 			endPosition,
 			FLT_MAX,
@@ -300,7 +240,7 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 	}
 	case buff_hash("TwistedFate_R_Gatemarker_Red"):
 	{
-		this->specialDashs[emitterHash] = std::make_unique<SpecialDashData>(
+		this->specialDashs[emitterHash] = std::make_shared<SpecialDashData>(
 			emitterPosition,
 			particlePosition,
 			FLT_MAX,
@@ -312,7 +252,7 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 	}
 	case buff_hash("Viego_R_Tell"):
 	{
-		this->specialDashs[emitterHash] = std::make_unique<SpecialDashData>(
+		this->specialDashs[emitterHash] = std::make_shared<SpecialDashData>(
 			emitterPosition,
 			particlePosition,
 			FLT_MAX,
@@ -327,7 +267,7 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 		if (target && target->is_me())
 		{
 			const auto& castPosition = target->get_position() + (emitter->get_direction() * (target->get_bounding_radius() + emitter->get_bounding_radius()));
-			this->specialDashs[emitterHash] = std::make_unique<SpecialDashData>(
+			this->specialDashs[emitterHash] = std::make_shared<SpecialDashData>(
 				emitterPosition,
 				castPosition,
 				FLT_MAX,
@@ -346,7 +286,7 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 			float remainingTime = passive->get_remaining_time();
 			float startTime = gametime->get_time() - (5.f - remainingTime);
 
-			this->specialDashs[emitterHash] = std::make_unique<SpecialDashData>(
+			this->specialDashs[emitterHash] = std::make_shared<SpecialDashData>(
 				emitterPosition,
 				particlePosition,
 				FLT_MAX,
@@ -395,7 +335,7 @@ void PredictionHelper::OnProcessSpellCast(game_object_script sender, spell_insta
 			fmin(800, sender->get_position().distance(spell->get_end_position()))
 		);
 
-		this->specialDashs[spellHash] = std::make_unique<SpecialDashData>(
+		this->specialDashs[spellHash] = std::make_shared<SpecialDashData>(
 			sender->get_position(),
 			endPosition,
 			FLT_MAX,
@@ -405,23 +345,32 @@ void PredictionHelper::OnProcessSpellCast(game_object_script sender, spell_insta
 		);
 		break;
 	}
-	case spell_hash("YoneE"):
-	{
-		myhero->print_chat(0x1, "dhasuhsa");
-		if (this->yoneShadowObject && this->yoneShadowObject->is_valid())
-		{
-			myhero->print_chat(0x1, "registrado");
-
-			this->specialDashs[spellHash] = std::make_unique<SpecialDashData>(
-				sender->get_position(),
-				this->yoneShadowObject->get_position(),
-				3000.f,
-				0.25f - (ping->get_ping() / 1000.f),
-				gametime->get_time(),
-				sender
-			);
-		}
-		break;
-	}
 	}
 }
+
+	void PredictionHelper::OnNetworkPacket(game_object_script sender, std::uint32_t network_id, pkttype_e type, void* args)
+	{
+		if (type != pkttype_e::PKT_S2C_PlayAnimation_s || !sender) return;
+
+		const auto& data = (PKT_S2C_PlayAnimationArgs*)args;
+		if (!data) return;
+
+		if (!sender->is_ai_hero() || !sender->is_enemy()) 
+			return;
+
+		const auto& name = data->animation_name;
+		if (sender->get_champion() == champion_id::Yone && this->yoneShadowObject)
+		{
+			if (this->yoneShadowObject->is_valid() && std::string(name) == ("Spell3_dash"))
+			{
+				this->specialDashs[spell_hash("YoneE")] = std::make_shared<SpecialDashData>(
+					sender->get_position(),
+					this->yoneShadowObject->get_position(),
+					3000.f,
+					0.25f - (ping->get_ping() / 1000.f),
+					gametime->get_time(),
+					sender
+				);
+			}
+		}
+	}

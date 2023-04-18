@@ -36,6 +36,9 @@
     <ClCompile Include="helpers\PredictionHelper.cpp">
       <Filter>Arquivos de Origem</Filter>
     </ClCompile>
+    <ClCompile Include="database\DashDatabase.cpp">
+      <Filter>Arquivos de Origem</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="loader\Loader.h">

@@ -1,6 +1,6 @@
 #pragma once
 #include "../Champion.h"
-
+#include "../../database/DashDatabase.h"
 class Lux : public Champion
 {
 public:
@@ -84,10 +84,11 @@ protected:
 		TreeEntry* use_invisible_q = nullptr;
 		TreeEntry* use_collision_q = nullptr;
 		
-		TreeEntry* use_q_if_no_dash = nullptr;
+		TreeEntry* wait_dash_for_use_q = nullptr;
 		std::map<champion_id, 
 			std::vector<std::pair<spellslot, TreeEntry*>>
 		> q_dash_whitelist = {};
+		TreeEntry* ignore_whitelist_if_key_pressed = nullptr;
 		TreeEntry* ignore_whitelist_if_slow = nullptr;
 
 		TreeEntry* use_w = nullptr;

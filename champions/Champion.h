@@ -55,8 +55,8 @@ protected:
 		if (target->is_dead())
 			return false;
 
-		const auto& hasAuroraPrediction = menu->get_tab("aurora_prediction");
-		if ((!hasAuroraPrediction || hasAuroraPrediction->is_hidden()) && !target->is_visible())
+		const auto& auroraPrediction = menu->get_tab("aurora_prediction");
+		if ((!auroraPrediction || auroraPrediction->is_hidden()) && !target->is_visible())
 			return false;
 		
 		if (target->is_ai_hero())

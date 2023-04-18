@@ -6,8 +6,8 @@ std::unique_ptr<Champion> champion = nullptr;
 bool Loader::Load()
 {
 
-		champion = std::make_unique<Lux>();
 	// Load the champion
+		champion = std::make_unique<Lux>();
 	switch (myhero->get_champion())
 	{
 	case champion_id::Lux:
@@ -44,6 +44,7 @@ void Loader::Callbacks::Register()
 	event_handler<events::on_buff_gain>::add_callback(OnBuffGain);
 	event_handler<events::on_process_spell_cast>::add_callback(OnProcessSpellCast);
 	event_handler<events::on_cast_spell>::add_callback(OnCastSpell);
+	event_handler<events::on_network_packet>::add_callback(OnNetworkPacket);
 }
 
 void Loader::Callbacks::Remove()
@@ -56,6 +57,7 @@ void Loader::Callbacks::Remove()
 	event_handler<events::on_buff_gain>::remove_handler(OnBuffGain);
 	event_handler<events::on_process_spell_cast>::remove_handler(OnProcessSpellCast);
 	event_handler<events::on_cast_spell>::remove_handler(OnCastSpell);
+	event_handler<events::on_network_packet>::remove_handler(OnNetworkPacket);
 }
 
 void Loader::Callbacks::OnUpdate()
@@ -100,4 +102,9 @@ void Loader::Callbacks::OnProcessSpellCast(game_object_script sender, spell_inst
 void Loader::Callbacks::OnCastSpell(spellslot slot, game_object_script target, vector& position, vector& position2, bool isCharge, bool* process)
 {
 	champion->OnCastSpell(slot, target, position, position2, isCharge, process);
+}
+
+void Loader::Callbacks::OnNetworkPacket(game_object_script sender, std::uint32_t network_id, pkttype_e type, void* args)
+{
+	PredictionHelper::GetInstance()->OnNetworkPacket(sender, network_id, type, args);
 }

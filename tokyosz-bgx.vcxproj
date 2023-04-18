@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="champions\Champion.cpp" />
     <ClCompile Include="champions\Lux\Lux.cpp" />
+    <ClCompile Include="database\DashDatabase.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="helpers\PredictionHelper.cpp" />
     <ClCompile Include="loader\Loader.cpp" />
