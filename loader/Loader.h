@@ -22,5 +22,6 @@ namespace Loader
 		void OnProcessSpellCast(game_object_script sender, spell_instance_script spell);
 		void OnCastSpell(spellslot slot, game_object_script target, vector& position, vector& position2, bool isCharge, bool* process);
 		void OnNetworkPacket(game_object_script sender, std::uint32_t network_id, pkttype_e type, void* args);
+		void OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args);
 	}
 }

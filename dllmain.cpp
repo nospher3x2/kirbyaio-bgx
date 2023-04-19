@@ -2,12 +2,12 @@
 
 #include "loader/Loader.h"
 
-PLUGIN_NAME("TokyoSz");
+PLUGIN_NAME("KirbyAIO");
 PLUGIN_TYPE(plugin_type::champion);
 
-//SUPPORTED_CHAMPIONS({ 
-//	champion_id::Lux 
-//});
+SUPPORTED_CHAMPIONS({ 
+	champion_id::Lux 
+});
 
 PLUGIN_API bool on_sdk_load(plugin_sdk_core* plugin_sdk_good)
 {

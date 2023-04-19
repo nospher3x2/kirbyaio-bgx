@@ -40,3 +40,7 @@ void Champion::OnCastSpell(spellslot slot, game_object_script target, vector& po
 {
 	
 }
+
+void Champion::OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args)
+{
+}

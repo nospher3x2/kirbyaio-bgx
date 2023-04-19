@@ -17,6 +17,7 @@ public:
 	void OnBuffGain(game_object_script object, buff_instance_script buff) override;
 	void OnCastSpell(spellslot slot, game_object_script target, vector& position, vector& position2, bool isCharge, bool* process) override;
 
+	void OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args) override;
 	/*
 	* Definitions
 	*/
@@ -34,11 +35,11 @@ public:
 	void SemiCastR();
 	
 	void AutomaticCastQ(); // On Dashing, On Special Skills, Zhonyas etc.
+	void AutomaticCastE(); 
 	void AutomaticCastE2(); // On Killable or if is leaving out E.
 	void AutomaticCastE2InPredict(); // Auto Attack and Ultimate
 	void AutomaticCastUltimate(); // In CC, OnKillable if On SpecialSkills/Zhonyas
-
-	void AutomaticCastComboOnSpecialDash();
+	void AutomaticCastOnSpecialDash();
 
 
 	/*
@@ -105,11 +106,20 @@ protected:
 		TreeEntry* use_q_on_special_items = nullptr;
 		TreeEntry* use_q_anti_melee = nullptr;
 		TreeEntry* use_q_anti_gapclose = nullptr;
+		std::map<uint32_t, TreeEntry*> use_q_anti_gapclose_whitelist = {};
 
 		TreeEntry* use_e_on_cc = nullptr;
 		TreeEntry* use_e_on_slow = nullptr;
-		
-		TreeEntry* use_r_on_killable = nullptr;
+		TreeEntry* use_e_on_special_skills = nullptr;
+		TreeEntry* use_e_on_special_items = nullptr;
+		TreeEntry* use_e_anti_gapclose = nullptr;
+		std::map<uint32_t, TreeEntry*> use_e_anti_gapclose_whitelist = {};
+		TreeEntry* use_e2 = nullptr;
+		TreeEntry* use_e2_mode = nullptr;
+		TreeEntry* use_e2_in_predict = nullptr;
+		TreeEntry* use_e2_if_killable = nullptr;
+
+		TreeEntry* use_r_if_killable = nullptr;
 		TreeEntry* use_r_on_cc = nullptr;
 		TreeEntry* try_r_on_slow = nullptr;
 		TreeEntry* use_r_on_special_skills = nullptr;
@@ -139,6 +149,9 @@ protected:
 
 			TreeEntry* r = nullptr;
 			TreeEntry* r_color = nullptr;
+
+			TreeEntry* r_minimap = nullptr;
+			TreeEntry* r_minimap_color = nullptr;
 		} spells;
 
 		struct {

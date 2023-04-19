@@ -45,6 +45,7 @@ void Loader::Callbacks::Register()
 	event_handler<events::on_process_spell_cast>::add_callback(OnProcessSpellCast);
 	event_handler<events::on_cast_spell>::add_callback(OnCastSpell);
 	event_handler<events::on_network_packet>::add_callback(OnNetworkPacket);
+	antigapcloser::add_event_handler(OnGapcloser);
 }
 
 void Loader::Callbacks::Remove()
@@ -58,6 +59,7 @@ void Loader::Callbacks::Remove()
 	event_handler<events::on_process_spell_cast>::remove_handler(OnProcessSpellCast);
 	event_handler<events::on_cast_spell>::remove_handler(OnCastSpell);
 	event_handler<events::on_network_packet>::remove_handler(OnNetworkPacket);
+	antigapcloser::remove_event_handler(OnGapcloser);
 }
 
 void Loader::Callbacks::OnUpdate()
@@ -107,4 +109,9 @@ void Loader::Callbacks::OnCastSpell(spellslot slot, game_object_script target, v
 void Loader::Callbacks::OnNetworkPacket(game_object_script sender, std::uint32_t network_id, pkttype_e type, void* args)
 {
 	PredictionHelper::GetInstance()->OnNetworkPacket(sender, network_id, type, args);
+}
+
+void Loader::Callbacks::OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args)
+{
+	champion->OnGapcloser(sender, args);
 }

@@ -77,7 +77,61 @@ void Lux::Load()
 	
 	auto const automatic = this->main->add_tab("automatic", "Automatic");
 	{
-		
+		automatic->add_separator("q_settings", "[Q] Settings");
+		{
+			this->automatic.use_q_on_dash = automatic->add_checkbox("use_q_on_dash", "Use Q on Dash", true);
+			this->automatic.use_q_on_special_skills = automatic->add_checkbox("use_q_on_special_skills", "Use Q on Special Dashs (YoneR etc)", true);
+			this->automatic.use_q_on_special_items = automatic->add_checkbox("use_q_on_special_items", "Use Q on Special Items (Zhonyas etc)", true);
+			this->automatic.use_q_anti_melee = automatic->add_checkbox("use_q_anti_melee", "Use Q on Anti Melee", true);
+			this->automatic.use_q_anti_gapclose = automatic->add_checkbox("use_q_anti_gapclose", "Use Q on Anti Gapclose", true);
+			const auto& antigapclose_whitelist = automatic->add_tab("q_gaplose", "Q Gapclose Whitelist");
+			{
+				antigapclose_whitelist->add_separator("x", "Enemy Whitelist");
+				const auto& enemies = entitylist->get_enemy_heroes();
+				for (const auto& enemy : enemies)
+				{
+					this->automatic.use_q_anti_gapclose_whitelist[enemy->get_network_id()] = antigapclose_whitelist->add_checkbox(enemy->get_model(), enemy->get_model(), true);
+					this->automatic.use_q_anti_gapclose_whitelist[enemy->get_network_id()]->set_texture(enemy->get_square_icon_portrait());
+				}
+				
+			}
+		}
+
+		automatic->add_separator("e_settings", "[E] Settings");
+		{
+			this->automatic.use_e_on_cc = automatic->add_checkbox("use_e_on_cc", "Use E on CC", true);
+			this->automatic.use_e_on_slow = automatic->add_checkbox("use_e_on_slow", "Use E on Slow", true);
+			this->automatic.use_e_on_special_skills = automatic->add_checkbox("use_e_on_special_skills", "Use E on Special Dashs (YoneR etc)", true);
+			this->automatic.use_e_on_special_items = automatic->add_checkbox("use_e_on_special_items", "Use E on Special Items (Zhonyas etc)", true);
+			this->automatic.use_e_anti_gapclose = automatic->add_checkbox("use_e_anti_gapclose", "Use E on Anti Gapclose", true);
+			const auto& antigapclose_whitelist = automatic->add_tab("e_gaplose", "E Gapclose Whitelist");
+			{
+				antigapclose_whitelist->add_separator("x", "Enemy Whitelist");
+				const auto& enemies = entitylist->get_enemy_heroes();
+				for (const auto& enemy : enemies)
+				{
+					this->automatic.use_q_anti_gapclose_whitelist[enemy->get_network_id()] = antigapclose_whitelist->add_checkbox(enemy->get_model(), enemy->get_model(), true);
+					this->automatic.use_q_anti_gapclose_whitelist[enemy->get_network_id()]->set_texture(enemy->get_square_icon_portrait());
+				}
+			}
+
+			automatic->add_separator("e2_settings", "[E2] Settings");
+			{
+				this->automatic.use_e2 = automatic->add_checkbox("use_e2", "Use E2", true);
+				this->automatic.use_e2_mode = automatic->add_combobox("use_e2_mode", "Use E2 Mode", { {"Enemy is Leaving",nullptr},{"Enemy Inside",nullptr },{"Always", nullptr} }, 0);
+				this->automatic.use_e2_in_predict = automatic->add_checkbox("use_e2_in_predict", "Use E2 in A.A/Ultimate Predict", true);
+				this->automatic.use_e2_if_killable = automatic->add_checkbox("use_e2_if_killable", "Use E2 if Killable", true);
+			}
+		}
+
+		automatic->add_separator("r_settings", "[R] Settings");
+		{
+			this->automatic.use_r_if_killable = automatic->add_checkbox("use_r_if_killable", "Use R if Killable", true);
+			this->automatic.use_r_on_cc = automatic->add_checkbox("use_r_on_cc", "Use R on CC", true);
+			this->automatic.try_r_on_slow = automatic->add_checkbox("use_r_on_slow", "Use R on Slow", true);
+			this->automatic.use_r_on_special_skills = automatic->add_checkbox("use_r_on_special_skills", "Use R on Special Dashs (YoneR etc)", true);
+			this->automatic.use_r_on_special_items = automatic->add_checkbox("use_r_on_special_items", "Use R on Special Items (Zhonyas etc)", true);
+		}
 	}
 
 	const auto hitchance = this->main->add_tab("hitchance", "Hitchance");
@@ -88,7 +142,7 @@ void Lux::Load()
 			this->hitchance.e = hitchance->add_combobox("e", "E Hitchance", { {"Low",nullptr},{"Medium",nullptr },{"High", nullptr},{"Very High",nullptr} }, 2);
 			this->hitchance.r = hitchance->add_combobox("r", "R Hitchance", { {"Low",nullptr},{"Medium",nullptr },{"High", nullptr},{"Very High",nullptr} }, 2);
 		}
-		hitchance->add_separator("fow", "FOW Hitchance");
+		hitchance->add_separator("fow", "FoW Hitchance");
 		{
 			this->hitchance.q_fow = hitchance->add_combobox("q_fow", "Q Hitchance", { {"Low",nullptr},{"Medium",nullptr },{"High", nullptr},{"Very High",nullptr} }, 1);
 			this->hitchance.e_fow = hitchance->add_combobox("e_fow", "E Hitchance", { {"Low",nullptr},{"Medium",nullptr },{"High", nullptr},{"Very High",nullptr} }, 1);
@@ -116,6 +170,10 @@ void Lux::Load()
 			float R_DEFAULT_COLOR[] = { 255.f, 255.f, 255.f, 255.f };
 			this->renderer.spells.r = spells->add_checkbox("r", "Should Draw R Range", false);
 			this->renderer.spells.r_color = spells->add_colorpick("r_color", " ^~ Color", R_DEFAULT_COLOR);
+
+			float R2_DEFAULT_COLOR[] = { 255.f, 255.f, 255.f, 255.f };
+			this->renderer.spells.r_minimap = spells->add_checkbox("r2", "Should Draw R Range in Minimap", true);
+			this->renderer.spells.r_minimap_color = spells->add_colorpick("r2_color", " ^~ Color", R2_DEFAULT_COLOR);
 		}
 
 		auto const damage = renderer->add_tab("damage", "Damage Indicator");
@@ -207,8 +265,10 @@ void Lux::OnUpdate()
 	
 	if (!myhero->is_recalling())
 	{
+		this->AutomaticCastQ();
+		this->AutomaticCastE();
 		this->AutomaticCastUltimate();
-		this->AutomaticCastComboOnSpecialDash();
+		this->AutomaticCastOnSpecialDash();
 	}
 
 	if (orbwalker->combo_mode())
@@ -217,6 +277,12 @@ void Lux::OnUpdate()
 			this->CastQ();
 		
 		if (this->combo.use_e->get_bool())
+			this->CastE();
+	}
+
+	if (orbwalker->harass())
+	{
+		//if (this->harass.use_e->get_bool())
 			this->CastE();
 	}
 }
@@ -233,6 +299,15 @@ void Lux::OnDraw()
 			spellFarmIsEnabled ? D3DCOLOR_ARGB(200, 0, 255, 0) : D3DCOLOR_ARGB(200, 255, 0, 0),
 			15,
 			"Spell Farm: %s", spellFarmIsEnabled ? "[ON]" : "[OFF]"
+		);
+	}
+
+	if (this->renderer.spells.r_minimap->get_bool())
+	{
+		draw_manager->draw_circle_on_minimap(
+			myhero->get_position(),
+			this->spells.r->range(),
+			this->renderer.spells.r_color->get_color()
 		);
 	}
 
@@ -292,7 +367,7 @@ void Lux::OnCreateObject(game_object_script object)
 	}
 
 	if (object->get_emitter_resources_hash() == buff_hash("Lux_R_cas"))
-	{
+	{	
 		const auto& endPosition = myhero->get_position() + myhero->get_direction().normalized() * (this->spells.r->range() + myhero->get_bounding_radius() / 2.f);
 		
 		this->r_data.object = object;
@@ -362,6 +437,33 @@ void Lux::OnCastSpell(spellslot slot, game_object_script target, vector& positio
 	}
 }
 
+void Lux::OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args)
+{
+	//const auto& E_RANGE = this->spells.e->range() + this->spells.e->get_radius();
+	//if (this->automatic.use_e_anti_gapclose->get_bool() && args->end_position.distance(myhero->get_position()) <= E_RANGE)
+	//{
+	//	const auto& senderEnabled = this->automatic.use_e_anti_gapclose_whitelist.find(sender->get_network_id());
+	//	if (senderEnabled != this->automatic.use_e_anti_gapclose_whitelist.end() && senderEnabled->second->get_bool())
+	//	{
+	//		this->spells.e->cast(sender);
+	//	}
+	//}
+	//
+	//if (this->automatic.use_q_anti_gapclose->get_bool() && !args->is_unstoppable)
+	//{
+	//	const auto& senderEnabled = this->automatic.use_q_anti_gapclose_whitelist.find(sender->get_network_id());
+	//	if (senderEnabled == this->automatic.use_q_anti_gapclose_whitelist.end() || !senderEnabled->second->get_bool())
+	//		return;
+	//
+	//	auto TimeUntilArrives = sender->get_position().distance(args->end_position) / args->speed;
+	//	auto TimeToHitWaypoint = myhero->get_position().distance(args->end_position) / this->spells.q->get_speed();
+	//
+	//	scheduler->delay_action(TimeUntilArrives - TimeToHitWaypoint, [&]() {
+	//		this->spells.q->cast(args->end_position);
+	//	});
+	//}
+}
+
 int Lux::GetSingularityState()
 {
 	return myhero->get_spell(spellslot::e)->get_name_hash() == spell_hash("LuxLightStrikeToggle");
@@ -374,6 +476,9 @@ bool Lux::HasPassive(game_object_script target)
 
 bool Lux::IsDashable(game_object_script target)
 {
+	if (!this->combo.wait_dash_for_use_q->get_bool())
+		return false;
+	
 	if (this->combo.ignore_whitelist_if_key_pressed->get_bool())
 		return false;
 	
@@ -381,15 +486,20 @@ bool Lux::IsDashable(game_object_script target)
 	if (it == this->combo.q_dash_whitelist.end())
 		return false;
 
-	for (auto& pair : it->second)
+	for (const auto& [dash, menu] : it->second)
 	{
-		if (pair.second->get_bool() == false)
+		if (!menu->get_bool())
+			continue;
+
+		if (!dash.canCast(target))
 			continue;
 		
-		if (target->get_spell_state(pair.first.slot) != spell_state::Ready)
-			continue;
+		const auto& spell = target->get_spell(dash.slot);
+		const auto& isReady = spell->is_learned() 
+			&& target->get_mana_for_spell(dash.slot) <= target->get_mana()
+			&& spell->cooldown() <= 0.f;
 		
-		if (pair.first.canCast(target))
+		if (isReady)
 			return true;
 	}
 
@@ -405,6 +515,7 @@ bool Lux::CastQ()
 		{
 			return !this->IsDashable(target);
 		});
+	
 	if (!target_prediction.first || !target_prediction.first->is_valid())
 		return false;
 	
@@ -491,30 +602,110 @@ void Lux::SemiCastR()
 	return;
 }
 
+void Lux::AutomaticCastQ()
+{
+	const auto& enemies = this->GetTargets(this->spells.q->range() + 200.f);
+	if (enemies.size() <= 0)
+		return;
+
+	for (const auto& enemy : enemies)
+	{
+		prediction_output output = this->spells.q->get_prediction(enemy);
+		if (output.hitchance < hit_chance::high)
+			continue;
+
+		if (!output.get_cast_position().is_valid())
+			continue;
+		
+		if (this->automatic.use_q_anti_melee->get_bool() && enemy->is_melee() && enemy->is_in_auto_attack_range(myhero))
+		{
+			this->spells.q->cast(output.get_cast_position());
+			return;
+		}
+		
+		if (this->automatic.use_q_on_dash->get_bool() && output.hitchance >= hit_chance::dashing)
+		{
+			this->spells.q->cast(output.get_cast_position());
+			return;
+		}
+	}
+}
+
+void Lux::AutomaticCastE()
+{
+	if (this->GetSingularityState() == 1 || (this->e_data.object && this->e_data.object->is_valid()))
+		return;
+
+	const auto& enemies = this->GetTargets(this->spells.e->range() + 200.f);
+	if (enemies.size() <= 0)
+		return;
+
+	for (const auto& enemy : enemies)
+	{
+		prediction_output output = this->spells.e->get_prediction(enemy);
+		if (output.hitchance < hit_chance::high)
+			continue;
+		
+		if (!output.get_cast_position().is_valid())
+			continue;
+
+		if (this->automatic.use_e_on_cc->get_bool() && output.hitchance >= hit_chance::immobile)
+		{
+			this->spells.e->cast(output.get_cast_position());
+			return;
+		}
+	}
+}
+
 void Lux::AutomaticCastE2()
 {
+	if (this->automatic.use_e2_mode->get_int() == 2 && this->spells.e->cast())
+		return;
+	
 	const auto& enemies = this->GetTargets(FLT_MAX, [&](game_object_script target) {
 		return !target_selector->is_invulnerable(target) && target->has_buff(buff_hash(("LuxESlow")));
-		});
+	});
 
 	if (enemies.size() <= 0)
 		return;
 
 	for (const auto& enemy : enemies)
 	{
-		// Auto Cast if enemy is leaving
-		prediction_output output = prediction->get_prediction(enemy, ping->get_ping() / 1000 + (1.f / 15.f));
-		if (this->e_data.circle.is_outside(output.get_unit_position()) && this->spells.e->cast())
-			return;
-
-		// Auto Cast if enemy will die; Refactor to use my own damage calculation
-		if (this->spells.e->get_damage(enemy) >= enemy->get_real_health(false, true) && this->spells.e->cast())
-			return;
+		if (this->automatic.use_e2_if_killable->get_bool())
+		{
+			// Auto Cast if enemy will die; Refactor to use my own damage calculation
+			if (this->spells.e->get_damage(enemy) >= enemy->get_real_health(false, true) && this->spells.e->cast())
+				return;
+		}
+		
+		switch (this->automatic.use_e2_mode->get_int())
+		{
+		case 0:
+		{
+			// Auto Cast if enemy is leaving
+			prediction_output output = prediction->get_prediction(enemy, ping->get_ping() / 1000 + (1.f / 15.f));
+			if (!output.get_unit_position().is_valid())
+				return;
+			
+			if (this->e_data.circle.is_outside(output.get_unit_position()) && this->spells.e->cast())
+				return;
+			break;
+		}
+		case 1:
+		{
+			if (this->spells.e->cast())
+				return;
+			break;
+		}
+		}
 	}
 }
 
 void Lux::AutomaticCastE2InPredict()
 {
+	if (!this->automatic.use_e2_in_predict->get_bool())
+		return;
+	
 	// Close E when attack missile is about to hit to explode passive
 	if (this->attack.missile && this->attack.target)
 	{
@@ -559,15 +750,16 @@ void Lux::AutomaticCastUltimate()
 	for (const auto& enemy : enemies)
 	{
 		auto prediction = this->spells.r->get_prediction(enemy);
-		if (prediction.hitchance == hit_chance::immobile)
+		if (prediction.hitchance == hit_chance::immobile && this->automatic.use_r_on_cc->get_bool())
 		{
 			this->spells.r->cast(prediction.get_cast_position());
 			return;
 		}
+		
 	}
 }
 
-void Lux::AutomaticCastComboOnSpecialDash()
+void Lux::AutomaticCastOnSpecialDash()
 {
 	const auto& range = this->spells.q->is_ready() ? this->spells.q->range() : this->spells.e->range() + this->spells.e->get_radius();
 	
@@ -582,21 +774,24 @@ void Lux::AutomaticCastComboOnSpecialDash()
 	const auto& dash = PredictionHelper::GetInstance()->GetSpecialDash(enemy);
 	if (!dash) 
 		return;
-	
-	bool CanCastEBeforeQ = this->spells.q->is_ready() ?
-		PredictionHelper::GetInstance()->CanCastOnSpecialDash(this->spells.q, dash, this->spells.e->get_delay())
-		: true;
-	
-	const auto& eRange = this->spells.e->range() + this->spells.e->get_radius();
-	if (CanCastEBeforeQ && this->spells.e->is_ready() && this->GetSingularityState() == 0)
+
+	if (this->automatic.use_e_on_special_skills->get_bool())
 	{
-		if (dash->endPosition.distance(myhero) <= eRange)
+		bool CanCastEBeforeQ = this->automatic.use_q_on_special_skills->get_bool() && this->spells.q->is_ready() ?
+			PredictionHelper::GetInstance()->CanCastOnSpecialDash(this->spells.q, dash, this->spells.e->get_delay())
+			: true;
+	
+		const auto& eRange = this->spells.e->range() + this->spells.e->get_radius();
+		if (CanCastEBeforeQ && this->spells.e->is_ready() && this->GetSingularityState() == 0)
 		{
-			myhero->cast_spell(spellslot::e, dash->endPosition);
+			if (dash->endPosition.distance(myhero) <= eRange)
+			{
+				myhero->cast_spell(spellslot::e, dash->endPosition);
+			}
 		}
 	}
-
-	if (this->spells.q->is_ready())
+	
+	if (this->automatic.use_q_on_special_skills->get_bool() && this->spells.q->is_ready())
 	{
 		const auto& qPrediction = PredictionHelper::GetInstance()->GetCastPositionOnSpecialDash(this->spells.q, dash, 2);
 		if (qPrediction.first)
@@ -605,8 +800,7 @@ void Lux::AutomaticCastComboOnSpecialDash()
 		}
 	}
 
-	
-	if (!this->spells.q->is_ready() && !this->spells.e->is_ready() && this->spells.r->is_ready())
+	if (this->automatic.use_r_on_special_skills->get_bool() && !this->spells.q->is_ready() && !this->spells.e->is_ready() && this->spells.r->is_ready())
 	{
 		const auto& rPrediction = PredictionHelper::GetInstance()->GetCastPositionOnSpecialDash(this->spells.r, dash, 0);
 		if (rPrediction.first)

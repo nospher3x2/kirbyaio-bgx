@@ -23,6 +23,8 @@ public:
 	virtual void OnProcessSpellCast(game_object_script sender, spell_instance_script spell);
 	virtual void OnCastSpell(spellslot slot, game_object_script target, vector& position, vector& position2, bool isCharge, bool* process);
 
+	virtual void OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args);
+
 
 protected:
 
@@ -38,6 +40,8 @@ protected:
 		spell_hash("VladimirSanguinePool")
 	};
 
+	// Utiliy
+	
 	bool IsYuumiAttached(game_object_script target)
 	{
 		if (target->get_champion() != champion_id::Yuumi)
@@ -55,22 +59,18 @@ protected:
 		if (target->is_dead())
 			return false;
 
-		const auto& auroraPrediction = menu->get_tab("aurora_prediction");
-		if ((!auroraPrediction || auroraPrediction->is_hidden()) && !target->is_visible())
-			return false;
-		
 		if (target->is_ai_hero())
 		{
 			if (this->IsYuumiAttached(target))
 				return false;
 
 			const auto& activeSpell = target->get_active_spell();
-			const auto& isCastingImmortilitySpell = activeSpell ? std::any_of(
+			const auto& isCastingImmortilitySpell = activeSpell && std::any_of(
 				std::begin(this->immuneSpells),
 				std::end(this->immuneSpells),
 				[&](uint32_t spellHash) {
 					return activeSpell->get_spell_data()->get_name_hash() == spellHash;
-				}) : false;
+				});
 
 			if (isCastingImmortilitySpell || target_selector->is_invulnerable(target))
 				return false;
@@ -114,6 +114,42 @@ protected:
 			return hit_chance::immobile;
 		}
 	}
+
+	void DrawDamageRl(game_object_script target, float damage, unsigned long color)
+	{
+		if (target == nullptr || !target->is_valid() || !target->is_hpbar_recently_rendered()) return;
+
+		auto bar_pos = target->get_hpbar_pos();
+
+		if (bar_pos.is_valid() && !target->is_dead() && target->is_visible())
+		{
+			auto x_offset = 0.f;
+			auto y_offset = -10.2f;
+			auto width = 105;
+			auto height = 11;
+
+			if (renderer->screen_height() > 1400)
+			{
+				x_offset = 10;
+				y_offset = -5;
+				width = 125;
+				height = 13;
+			}
+
+			const auto health = target->get_health();
+			auto damage_size = (width * (damage / target->get_max_health()));
+			bar_pos = vector(bar_pos.x + x_offset + (width * (health / target->get_max_health())), bar_pos.y + y_offset);
+
+			if (damage >= health) damage_size = (width * (health / target->get_max_health()));
+
+			if (damage_size > width) damage_size = width;
+
+			const auto size = vector(bar_pos.x + x_offset + (damage_size * -1), bar_pos.y + height);
+
+			draw_manager->add_filled_rect(bar_pos, size, color);
+		}
+	}
+	// Target Selector Helper
 
 	game_object_script GetSelectedTarget()
 	{
@@ -176,7 +212,7 @@ protected:
 				continue;
 			
 			auto output = spell->get_prediction(enemy);
-			if (output.hitchance >= hitchance)
+			if (output.get_cast_position().is_valid() && output.hitchance >= hitchance)
 			{
 				targets.push_back(std::make_pair(enemy, output));
 				enemies.push_back(enemy);
