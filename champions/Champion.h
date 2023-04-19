@@ -59,6 +59,10 @@ protected:
 		if (target->is_dead())
 			return false;
 
+		const auto& usingAuroraPrediction = prediction->get_active_prediction_name_hash() == 0x0;
+		if (!usingAuroraPrediction && !target->is_visible())
+			return false;
+
 		if (target->is_ai_hero())
 		{
 			if (this->IsYuumiAttached(target))
@@ -156,8 +160,8 @@ protected:
 		const auto& target = target_selector->get_selected_target();
 		if (!this->IsValidCustom(target))
 			return nullptr;
-
-		auto output = prediction->get_prediction(target, 1.0f);
+		
+		auto output = prediction->get_prediction(target, 0.1f);
 		if (output.hitchance == hit_chance::impossible) // FoW.
 			return nullptr;
 
