@@ -15,7 +15,7 @@ public:
 	void OnDeleteObject(game_object_script object) override;
 
 	void OnBuffGain(game_object_script object, buff_instance_script buff) override;
-	void OnCastSpell(spellslot slot, game_object_script target, vector& position, vector& position2, bool isCharge, bool* process) override;
+	void OnProcessSpellCast(game_object_script sender, spell_instance_script spell) override;
 
 	void OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args) override;
 	/*
@@ -47,7 +47,6 @@ public:
 	*/
 	float GetPassiveDamage(game_object_script target);
 	float GetQDamage(game_object_script target);
-	float GetWDamage(game_object_script target);
 	float GetEDamage(game_object_script target);
 	float GetRDamage(game_object_script target);
 	float GetFullComboDamage(game_object_script target);
@@ -58,7 +57,9 @@ protected:
 	
 	struct {
 		game_object_script object;
+		vector position;
 		geometry::polygon circle;
+		float createdAt;
 	} e_data;
 
 	struct {
@@ -83,6 +84,7 @@ protected:
 	struct {
 		TreeEntry* use_q = nullptr;
 		TreeEntry* use_invisible_q = nullptr;
+		TreeEntry* invisible_q_mana = nullptr;
 		TreeEntry* use_collision_q = nullptr;
 		
 		TreeEntry* wait_dash_for_use_q = nullptr;
@@ -90,7 +92,6 @@ protected:
 			std::vector<std::pair<SpellDash, TreeEntry*>>
 		> q_dash_whitelist = {};
 		TreeEntry* ignore_whitelist_if_key_pressed = nullptr;
-		TreeEntry* ignore_whitelist_if_slow = nullptr;
 
 		TreeEntry* use_w = nullptr;
 		TreeEntry* w_incoming_damage = nullptr;
@@ -109,7 +110,6 @@ protected:
 		std::map<uint32_t, TreeEntry*> use_q_anti_gapclose_whitelist = {};
 
 		TreeEntry* use_e_on_cc = nullptr;
-		TreeEntry* use_e_on_slow = nullptr;
 		TreeEntry* use_e_on_special_skills = nullptr;
 		TreeEntry* use_e_on_special_items = nullptr;
 		TreeEntry* use_e_anti_gapclose = nullptr;
@@ -121,7 +121,6 @@ protected:
 
 		TreeEntry* use_r_if_killable = nullptr;
 		TreeEntry* use_r_on_cc = nullptr;
-		TreeEntry* try_r_on_slow = nullptr;
 		TreeEntry* use_r_on_special_skills = nullptr;
 		TreeEntry* use_r_on_special_items = nullptr;
 	} automatic;
@@ -160,14 +159,14 @@ protected:
 		} damage;
 
 		struct {
-			TreeEntry* draw_farm = nullptr;
+			TreeEntry* draw_ignoring_dash = nullptr;
 			TreeEntry* draw_killable = nullptr;
+			TreeEntry* draw_e_duration = nullptr;
 		} misc;
 
 	} renderer;
 
 	struct {
-		TreeEntry* spell_farm = nullptr;
 		TreeEntry* semi_q = nullptr;
 		TreeEntry* semi_e = nullptr;
 		TreeEntry* semi_r = nullptr;

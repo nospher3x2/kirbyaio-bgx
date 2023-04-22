@@ -3,7 +3,7 @@
 
 void Lux::Load()
 {
-	DashDatabase::load();
+	DashDatabase::Load();
 	
 	this->main = menu->create_tab("kirby_lux", "[KirbyAIO] Lux");
 	this->main->set_assigned_texture(myhero->get_square_icon_portrait());
@@ -15,6 +15,7 @@ void Lux::Load()
 		{
 			this->combo.use_q = combo->add_checkbox("use_q", "Use Q", true);
 			this->combo.use_invisible_q = combo->add_checkbox("use_invisible_q", "Use Invisible Q (W After)", true);
+			this->combo.invisible_q_mana = combo->add_slider("invisible_q_mana", " ^~ Min Q Mana %", 80, 100, 0, 100);
 			this->combo.use_collision_q = combo->add_checkbox("q_collision", "Use Q Collision on Minion Logic", true);
 			
 			this->combo.wait_dash_for_use_q = combo->add_checkbox("wait_dash_for_use_q", "Dont use Q if enemy has dash", true);
@@ -24,7 +25,7 @@ void Lux::Load()
 				const auto& enemies = entitylist->get_enemy_heroes();
 				for (auto const& enemy : enemies)
 				{
-					const auto& dashs = DashDatabase::getDashes(enemy->get_champion());
+					const auto& dashs = DashDatabase::GetDashes(enemy->get_champion());
 					if (dashs.size() > 0)
 					{
 						const auto& tab = dash_database->add_tab(enemy->get_model(), enemy->get_model());
@@ -42,7 +43,6 @@ void Lux::Load()
 				dash_database->add_separator("missing", "If you want to add a dash, please contact me on discord.");
 			}
 			this->combo.ignore_whitelist_if_key_pressed = combo->add_hotkey("ignore_whitelist_if_key_pressed", " ^~ Ignore Dash", TreeHotkeyMode::Hold, 0x1, false);
-			this->combo.ignore_whitelist_if_slow = combo->add_checkbox("ignore_whitelist_if_slow", " ^~ Ignore Dash if Slowed", false);
 		}
 
 		combo->add_separator("w_settings", "[W] Settings");
@@ -70,11 +70,6 @@ void Lux::Load()
 		
 	}
 	
-	auto const farming = this->main->add_tab("farming", "Farming");
-	{
-
-	}
-	
 	auto const automatic = this->main->add_tab("automatic", "Automatic");
 	{
 		automatic->add_separator("q_settings", "[Q] Settings");
@@ -100,7 +95,6 @@ void Lux::Load()
 		automatic->add_separator("e_settings", "[E] Settings");
 		{
 			this->automatic.use_e_on_cc = automatic->add_checkbox("use_e_on_cc", "Use E on CC", true);
-			this->automatic.use_e_on_slow = automatic->add_checkbox("use_e_on_slow", "Use E on Slow", true);
 			this->automatic.use_e_on_special_skills = automatic->add_checkbox("use_e_on_special_skills", "Use E on Special Dashs (YoneR etc)", true);
 			this->automatic.use_e_on_special_items = automatic->add_checkbox("use_e_on_special_items", "Use E on Special Items (Zhonyas etc)", true);
 			this->automatic.use_e_anti_gapclose = automatic->add_checkbox("use_e_anti_gapclose", "Use E on Anti Gapclose", true);
@@ -128,7 +122,6 @@ void Lux::Load()
 		{
 			this->automatic.use_r_if_killable = automatic->add_checkbox("use_r_if_killable", "Use R if Killable", true);
 			this->automatic.use_r_on_cc = automatic->add_checkbox("use_r_on_cc", "Use R on CC", true);
-			this->automatic.try_r_on_slow = automatic->add_checkbox("use_r_on_slow", "Use R on Slow", true);
 			this->automatic.use_r_on_special_skills = automatic->add_checkbox("use_r_on_special_skills", "Use R on Special Dashs (YoneR etc)", true);
 			this->automatic.use_r_on_special_items = automatic->add_checkbox("use_r_on_special_items", "Use R on Special Items (Zhonyas etc)", true);
 		}
@@ -185,18 +178,20 @@ void Lux::Load()
 
 		auto const misc = renderer->add_tab("misc", "Misc");
 		{
-			this->renderer.misc.draw_farm = misc->add_checkbox("draw_farm", "Draw Farm State", true);
 			this->renderer.misc.draw_killable = misc->add_checkbox("draw_killable", "Draw Killable Warning", true);
+			this->renderer.misc.draw_ignoring_dash = misc->add_checkbox("draw_ignoring_dash", "Draw Ignoring Dash", true);
+			this->renderer.misc.draw_e_duration = misc->add_checkbox("draw_e_duration", "Draw E Circle Duration", true);
 		}
 	}
 	
 	this->main->add_separator("hotkeys_header", "~ Hotkeys ~");
 	{
-		this->hotkeys.spell_farm = this->main->add_hotkey("farm", "Toggle Farm", TreeHotkeyMode::Toggle, 'A', true, false);
 		this->hotkeys.semi_q = this->main->add_hotkey("semi_q", "Semi Q", TreeHotkeyMode::Hold, 'G', true, false);
 		this->hotkeys.semi_e = this->main->add_hotkey("semi_e", "Semi E", TreeHotkeyMode::Hold, 'J', true, false);
 		this->hotkeys.semi_r = this->main->add_hotkey("semi_r", "Semi R", TreeHotkeyMode::Hold, 'T', true, false);
 	}
+
+	this->main->add_separator("credits", "<3 Nospher#9995 & vi#3992");
 
 	this->spells.q = plugin_sdk->register_spell(spellslot::q, 1300.f);
 	this->spells.w = plugin_sdk->register_spell(spellslot::w, 1175.f);
@@ -227,7 +222,7 @@ void Lux::Load()
 
 	this->spells.e->set_skillshot(
 		0.25f,
-		310.f,
+		300.f,
 		1200.f,
 		{
 			collisionable_objects::yasuo_wall
@@ -288,30 +283,65 @@ void Lux::OnUpdate()
 }
 
 void Lux::OnDraw()
-{
-	auto const position = myhero->get_position();
-
-	if (this->renderer.misc.draw_farm->get_bool())
+{	
+	for (const auto& enemy : entitylist->get_enemy_heroes())
 	{
-		auto const spellFarmIsEnabled = this->hotkeys.spell_farm->get_bool();
-		draw_manager->add_text(
-			position,
-			spellFarmIsEnabled ? D3DCOLOR_ARGB(200, 0, 255, 0) : D3DCOLOR_ARGB(200, 255, 0, 0),
-			15,
-			"Spell Farm: %s", spellFarmIsEnabled ? "[ON]" : "[OFF]"
-		);
+		if (!enemy->is_valid() || !enemy->is_visible_on_screen())
+			continue;
+
+		const auto& damage = this->GetFullComboDamage(enemy);
+		if (this->renderer.misc.draw_killable->get_bool() && damage >= enemy->get_real_health(false, true))
+		{
+			draw_manager->add_text(
+				enemy->get_position(),
+				D3DCOLOR_ARGB(200, 255, 0, 0),
+				18,
+				"KILLABLE!"
+			);
+		}
+
+		if (this->renderer.damage.enabled->get_bool())
+		{
+			this->DrawDamageRl(
+				enemy,
+				damage,
+				this->renderer.damage.color->get_color()
+			);
+		}
 	}
 
+	const auto& position = myhero->get_position();
 	if (this->renderer.spells.r_minimap->get_bool())
 	{
 		draw_manager->draw_circle_on_minimap(
-			myhero->get_position(),
+			position,
 			this->spells.r->range(),
-			this->renderer.spells.r_color->get_color()
+			this->renderer.spells.r_minimap_color->get_color()
 		);
 	}
 
-	// Draw R Polygon
+	if (this->renderer.misc.draw_e_duration->get_bool() && e_data.object && e_data.object->is_valid())
+	{
+		this->DrawSemiCircle(
+			e_data.position,
+			300,
+			5.f,
+			360,
+			(360 * (1 - ((gametime->get_time() - e_data.createdAt) / 5))),
+			D3DCOLOR_ARGB(145, 255, 255, 255)
+		);
+	}
+
+	if (this->renderer.misc.draw_ignoring_dash->get_bool() && this->combo.ignore_whitelist_if_key_pressed->get_bool())
+	{
+		draw_manager->add_text(
+			position,
+			D3DCOLOR_ARGB(255, 255, 255, 255),
+			12,
+			"IGNORING DASH"
+		);
+	}
+
 	if (this->r_data.object && this->r_data.object->is_valid())
 	{
 		auto& polygon = this->r_data.line;
@@ -331,30 +361,51 @@ void Lux::OnDraw()
 
 void Lux::OnEnvDraw()
 {
+	const auto& position = myhero->get_position();
 	if (this->renderer.spells.q->get_bool())
 	{
-		auto const color = this->renderer.spells.q_color->get_color();
-		draw_manager->add_circle(myhero->get_position(), this->spells.q->range(), color);
+		draw_manager->add_circle_with_glow(
+			position,
+			this->renderer.spells.q_color->get_color(),
+			this->spells.q->range(),
+			1,
+			{ .12,.75,0,0 }
+		);
 	}
 
 	if (this->renderer.spells.w->get_bool())
 	{
-		auto const color = this->renderer.spells.w_color->get_color();
-		draw_manager->add_circle(myhero->get_position(), this->spells.w->range(), color);
+		draw_manager->add_circle_with_glow(
+			position,
+			this->renderer.spells.w_color->get_color(),
+			this->spells.w->range(),
+			1,
+			{ .12,.75,0,0 }
+		);
+		
 	}
 
 	if (this->renderer.spells.e->get_bool())
 	{
-		auto const color = this->renderer.spells.e_color->get_color();
-		draw_manager->add_circle(myhero->get_position(), this->spells.e->range(), color, 2);
+		draw_manager->add_circle_with_glow(
+			myhero->get_position(),
+			this->renderer.spells.e_color->get_color(),
+			this->spells.e->range(),
+			1,
+			{ .12,.75,0,0 }
+		);
 	}
 
 	if (this->renderer.spells.r->get_bool())
 	{
-		auto const color = this->renderer.spells.r_color->get_color();
-		draw_manager->add_circle(myhero->get_position(), this->spells.r->range(), color);
+		draw_manager->add_circle_with_glow(
+			myhero->get_position(),
+			this->renderer.spells.r_color->get_color(),
+			this->spells.r->range(),
+			1,
+			{ .12,.75,0,0 }
+		);
 	}
-
 }
 
 void Lux::OnCreateObject(game_object_script object)
@@ -362,10 +413,10 @@ void Lux::OnCreateObject(game_object_script object)
 	if (object->get_emitter_resources_hash() == buff_hash("Lux_E_tar_aoe_green"))
 	{
 		this->e_data.object = object;
-		this->e_data.circle = geometry::circle(object->get_position(), 300).to_polygon();
+		this->e_data.createdAt = gametime->get_time();
 		return;
 	}
-
+	
 	if (object->get_emitter_resources_hash() == buff_hash("Lux_R_cas"))
 	{	
 		const auto& endPosition = myhero->get_position() + myhero->get_direction().normalized() * (this->spells.r->range() + myhero->get_bounding_radius() / 2.f);
@@ -391,12 +442,12 @@ void Lux::OnCreateObject(game_object_script object)
 
 void Lux::OnDeleteObject(game_object_script object)
 {
-	const auto& id = object->get_network_id();;
-
+	const auto& id = object->get_network_id();
 	if (this->e_data.object && this->e_data.object->get_network_id() == id)
 	{
 		this->e_data.object = nullptr;
 		this->e_data.circle = geometry::circle(vector(0, 0, 0), 0).to_polygon();
+		this->e_data.position = vector(0, 0, 0);
 		return;
 	}
 
@@ -423,45 +474,69 @@ void Lux::OnBuffGain(game_object_script object, buff_instance_script buff)
 	}
 }
 
-void Lux::OnCastSpell(spellslot slot, game_object_script target, vector& position, vector& position2, bool isCharge, bool* process)
+void Lux::OnProcessSpellCast(game_object_script sender, spell_instance_script spell)
 {
-	if (slot != spellslot::q || !orbwalker->combo_mode())
+	if (!sender->is_me())
 		return;
 
-	if (this->combo.use_invisible_q->get_bool() && this->spells.w->is_ready())
+	const auto& slot = spell->get_spellslot();
+	if (slot == spellslot::q && orbwalker->combo_mode())
 	{
-		scheduler->delay_action(0.25f + ping->get_ping() / 1000 + (1.f/30.f), [this, position]() {
-			this->spells.w->cast(position);
-		});
+		if (this->combo.use_invisible_q->get_bool() && this->spells.w->is_ready())
+		{
+			const auto& position = spell->get_end_position();
+			scheduler->delay_action(0.1f + ping->get_ping() / 1000 + (1.f / 30.f), [this, position]() {
+				if (myhero->get_mana_percent() >= this->combo.invisible_q_mana->get_int())
+				{
+					this->spells.w->cast(position);
+				}
+			});
+		}
 		return;
+	}
+	
+	if (slot == spellslot::e)
+	{
+		this->e_data.position = spell->get_end_position();
+		this->e_data.circle = geometry::circle(spell->get_end_position(), 300).to_polygon();
 	}
 }
 
 void Lux::OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args)
 {
-	//const auto& E_RANGE = this->spells.e->range() + this->spells.e->get_radius();
-	//if (this->automatic.use_e_anti_gapclose->get_bool() && args->end_position.distance(myhero->get_position()) <= E_RANGE)
-	//{
-	//	const auto& senderEnabled = this->automatic.use_e_anti_gapclose_whitelist.find(sender->get_network_id());
-	//	if (senderEnabled != this->automatic.use_e_anti_gapclose_whitelist.end() && senderEnabled->second->get_bool())
-	//	{
-	//		this->spells.e->cast(sender);
-	//	}
-	//}
-	//
-	//if (this->automatic.use_q_anti_gapclose->get_bool() && !args->is_unstoppable)
-	//{
-	//	const auto& senderEnabled = this->automatic.use_q_anti_gapclose_whitelist.find(sender->get_network_id());
-	//	if (senderEnabled == this->automatic.use_q_anti_gapclose_whitelist.end() || !senderEnabled->second->get_bool())
-	//		return;
-	//
-	//	auto TimeUntilArrives = sender->get_position().distance(args->end_position) / args->speed;
-	//	auto TimeToHitWaypoint = myhero->get_position().distance(args->end_position) / this->spells.q->get_speed();
-	//
-	//	scheduler->delay_action(TimeUntilArrives - TimeToHitWaypoint, [&]() {
-	//		this->spells.q->cast(args->end_position);
-	//	});
-	//}
+	if (!sender || !sender ->is_valid() || !args)
+		return;
+
+	const auto& E_RANGE = this->spells.e->range() + this->spells.e->get_radius();
+	if (this->automatic.use_e_anti_gapclose->get_bool() && args->end_position.distance(myhero->get_position()) <= E_RANGE)
+	{
+		const auto& senderEnabled = this->automatic.use_e_anti_gapclose_whitelist.find(sender->get_network_id());
+		if (senderEnabled != this->automatic.use_e_anti_gapclose_whitelist.end() && senderEnabled->second->get_bool())
+		{
+			this->spells.e->cast(sender);
+		}
+	}
+
+	if (this->automatic.use_q_anti_gapclose->get_bool() && !args->is_unstoppable)
+	{
+		const auto& senderEnabled = this->automatic.use_q_anti_gapclose_whitelist.find(sender->get_network_id());
+		if (senderEnabled != this->automatic.use_q_anti_gapclose_whitelist.end() && senderEnabled->second->get_bool())
+		{
+			const auto& willReachAt = args->start_time + args->end_position.distance(myhero->get_position()) / args->speed;
+			const auto& travelTime = gametime->get_time() +
+				myhero->get_position().distance(args->end_position) / this->spells.q->get_speed()
+				+ this->spells.q->get_delay();
+
+			const auto& diff = travelTime - willReachAt;
+			if (diff > 0.25f)
+			{
+				if (this->spells.q->cast(args->end_position))
+				{
+					myhero->print_chat(0x1, "Q on Gapcloser");
+				}
+			}
+		}
+	}
 }
 
 int Lux::GetSingularityState()
@@ -604,6 +679,9 @@ void Lux::SemiCastR()
 
 void Lux::AutomaticCastQ()
 {
+	if (!this->spells.q->is_ready())
+		return;
+	
 	const auto& enemies = this->GetTargets(this->spells.q->range() + 200.f);
 	if (enemies.size() <= 0)
 		return;
@@ -633,7 +711,7 @@ void Lux::AutomaticCastQ()
 
 void Lux::AutomaticCastE()
 {
-	if (this->GetSingularityState() == 1 || (this->e_data.object && this->e_data.object->is_valid()))
+	if (!this->spells.e->is_ready() || this->GetSingularityState() == 1 || (this->e_data.object && this->e_data.object->is_valid()))
 		return;
 
 	const auto& enemies = this->GetTargets(this->spells.e->range() + 200.f);
@@ -659,9 +737,12 @@ void Lux::AutomaticCastE()
 
 void Lux::AutomaticCastE2()
 {
-	if (this->automatic.use_e2_mode->get_int() == 2 && this->spells.e->cast())
+	if (!this->spells.e->is_ready() || this->GetSingularityState() == 0)
 		return;
 	
+	if (this->automatic.use_e2_mode->get_int() == 2 && this->spells.e->cast())
+		return;
+
 	const auto& enemies = this->GetTargets(FLT_MAX, [&](game_object_script target) {
 		return !target_selector->is_invulnerable(target) && target->has_buff(buff_hash(("LuxESlow")));
 	});
@@ -674,7 +755,7 @@ void Lux::AutomaticCastE2()
 		if (this->automatic.use_e2_if_killable->get_bool())
 		{
 			// Auto Cast if enemy will die; Refactor to use my own damage calculation
-			if (this->spells.e->get_damage(enemy) >= enemy->get_real_health(false, true) && this->spells.e->cast())
+			if (this->GetEDamage(enemy) >= enemy->get_real_health(false, true) && this->spells.e->cast())
 				return;
 		}
 		
@@ -683,12 +764,15 @@ void Lux::AutomaticCastE2()
 		case 0:
 		{
 			// Auto Cast if enemy is leaving
-			prediction_output output = prediction->get_prediction(enemy, ping->get_ping() / 1000 + (1.f / 15.f));
+			prediction_output output = prediction->get_prediction(enemy, ping->get_ping() / 1000 + 0.25f);
 			if (!output.get_unit_position().is_valid())
 				return;
 			
 			if (this->e_data.circle.is_outside(output.get_unit_position()) && this->spells.e->cast())
+			{
+				console->print("castou");
 				return;
+			}
 			break;
 		}
 		case 1:
@@ -703,7 +787,7 @@ void Lux::AutomaticCastE2()
 
 void Lux::AutomaticCastE2InPredict()
 {
-	if (!this->automatic.use_e2_in_predict->get_bool())
+	if (!this->automatic.use_e2_in_predict->get_bool() || !this->spells.e->is_ready())
 		return;
 	
 	// Close E when attack missile is about to hit to explode passive
@@ -743,19 +827,57 @@ void Lux::AutomaticCastUltimate()
 	if (!this->spells.r->is_ready())
 		return; 
 
-	const auto& enemies = this->GetTargets(this->spells.r->range());
+	const auto& E_RANGE = this->spells.e->range() + this->spells.e->get_radius();
+	const auto& enemies = this->GetTargets(this->spells.r->range(), [&](game_object_script target) {
+		// OVERKILL CHECK IF KILLABLE WITH A.A
+		if (myhero->is_in_auto_attack_range(target))
+		{
+			const auto& EXTRA_DAMAGE = this->HasPassive(target) ? this->GetPassiveDamage(target) : 0;
+			const auto& TOTAL_DAMAGE = myhero->get_auto_attack_damage(target) + EXTRA_DAMAGE;
+			if (TOTAL_DAMAGE >= target->get_real_health(false, true))
+				return false;
+		}
+		 
+		// OVERKILL cHECK IF KILLABLE WITH E
+		const auto& IS_KILLABLE = this->GetEDamage(target) >= target->get_real_health(false, true);;
+		if (this->spells.e->is_ready() && this->GetSingularityState() == 0 && target->get_distance(myhero) <= E_RANGE)
+		{
+			return !IS_KILLABLE;
+		}
+
+		// OVERKILL CHECK IF WILL KILLED WITH E
+		if (this->e_data.circle.is_inside(target->get_position()))
+		{
+			return !IS_KILLABLE;
+		}
+
+		return true;
+	});
+	
 	if (enemies.size() <= 0)
 		return;
 
 	for (const auto& enemy : enemies)
 	{
 		auto prediction = this->spells.r->get_prediction(enemy);
-		if (prediction.hitchance == hit_chance::immobile && this->automatic.use_r_on_cc->get_bool())
+		if (prediction.hitchance == hit_chance::immobile)
 		{
-			this->spells.r->cast(prediction.get_cast_position());
-			return;
+			const std::set<buff_type>& immobileBuffs = this->GetImmobileBuffTypes();
+			for (const auto& buff : enemy->get_bufflist())
+			{
+				if (!buff || !buff->is_valid() || !buff->is_alive())
+					continue;
+				
+				if (immobileBuffs.find(buff->get_type()) == immobileBuffs.end())
+					continue;
+
+				if (buff->get_remaining_time() >= 0.8)
+				{
+					this->spells.r->cast(prediction.get_cast_position());
+					return;
+				}
+			}
 		}
-		
 	}
 }
 
@@ -811,4 +933,78 @@ void Lux::AutomaticCastOnSpecialDash()
 			}
 		}
 	}
+}
+
+float Lux::GetPassiveDamage(game_object_script target)
+{
+	const auto& damage = 10 + (10 * myhero->get_level()) + (myhero->get_total_ability_power() * 0.20);
+	return damagelib->calculate_damage_on_unit(myhero, target, damage_type::magical, damage);
+}
+
+float Lux::GetQDamage(game_object_script target)
+{
+	const auto& level = myhero->get_spell(spellslot::q)->level();
+	if (level == 0)
+		return 0;
+	
+	const auto& damage = 40 + (40 * level) + (myhero->get_total_ability_power() * 0.6);
+	return damagelib->calculate_damage_on_unit(myhero, target, damage_type::magical, damage);
+}
+
+float Lux::GetEDamage(game_object_script target)
+{
+	const auto& level = myhero->get_spell(spellslot::e)->level();
+	if (level == 0)
+		return 0;
+
+	const auto& damage = 20 + (50 * level) + (myhero->get_total_ability_power() * 0.8);
+	return damagelib->calculate_damage_on_unit(myhero, target, damage_type::magical, damage);
+}
+
+float Lux::GetRDamage(game_object_script target)
+{
+	const auto& level = myhero->get_spell(spellslot::r)->level();
+	if (level == 0)
+		return 0;
+
+	const auto& damage = 200 + (100 * level) + (myhero->get_total_ability_power() * 1.2);
+	return damagelib->calculate_damage_on_unit(myhero, target, damage_type::magical, damage);
+}
+
+float Lux::GetFullComboDamage(game_object_script target)
+{
+	float actualMana = myhero->get_mana();
+	float totalDamage = 0;
+	bool hasPassive = this->HasPassive(target);
+	
+	const auto& qManaCost = myhero->get_mana_for_spell(spellslot::q);
+	if (this->spells.q->is_ready() && actualMana >= qManaCost) {
+		totalDamage += this->GetQDamage(target);
+		actualMana -= qManaCost;
+		totalDamage += hasPassive ? GetPassiveDamage(target) : 0;
+		hasPassive = !hasPassive;
+	}
+
+	const auto& eManaCost = myhero->get_mana_for_spell(spellslot::e);
+	if (this->spells.e->is_ready() && actualMana >= eManaCost) {
+		totalDamage += this->GetEDamage(target);
+		actualMana -= eManaCost;
+		totalDamage += hasPassive ? GetPassiveDamage(target) : 0;
+		hasPassive = !hasPassive;
+	}
+
+	const auto& rManaCost = myhero->get_mana_for_spell(spellslot::r);
+	if (this->spells.r->is_ready() && actualMana >= rManaCost) {
+		totalDamage += this->GetRDamage(target);
+		totalDamage += hasPassive ? GetPassiveDamage(target) : 0;
+		hasPassive = !hasPassive;
+	}
+
+	if (myhero->is_in_auto_attack_range(target))
+	{
+		totalDamage += myhero->get_auto_attack_damage(target);
+		totalDamage += hasPassive ? GetPassiveDamage(target) : 0;
+	}
+
+	return totalDamage;
 }

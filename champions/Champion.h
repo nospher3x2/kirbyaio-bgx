@@ -1,6 +1,7 @@
 #pragma once
 #include "../plugin_sdk/plugin_sdk.hpp"
 #include "../helpers/PredictionHelper.h"
+#include <set>
 
 class Champion
 {
@@ -41,7 +42,6 @@ protected:
 	};
 
 	// Utiliy
-	
 	bool IsYuumiAttached(game_object_script target)
 	{
 		if (target->get_champion() != champion_id::Yuumi)
@@ -84,20 +84,20 @@ protected:
 		return true;
 	}
 
-	bool IsStunned(game_object_script target)
+	std::set<buff_type> GetImmobileBuffTypes()
 	{
-		return target->has_buff_type({ 
-			buff_type::Stun, 
-			buff_type::Taunt, 
-			buff_type::Polymorph, 
-			buff_type::Fear, 
-			buff_type::Charm, 
-			buff_type::Suppression, 
-			buff_type::Knockup, 
-			buff_type::Knockback, 
+		return {
+			buff_type::Stun,
+			buff_type::Taunt,
+			buff_type::Polymorph,
+			buff_type::Fear,
+			buff_type::Charm,
+			buff_type::Suppression,
+			buff_type::Knockup,
+			buff_type::Knockback,
 			buff_type::Asleep,
 			buff_type::Snare
-		});
+		};
 	}
 
 	hit_chance GetHitchanceFromConfig(TreeEntry* entry)
@@ -119,6 +119,7 @@ protected:
 		}
 	}
 
+	// Draw Helper
 	void DrawDamageRl(game_object_script target, float damage, unsigned long color)
 	{
 		if (target == nullptr || !target->is_valid() || !target->is_hpbar_recently_rendered()) return;
@@ -153,8 +154,20 @@ protected:
 			draw_manager->add_filled_rect(bar_pos, size, color);
 		}
 	}
+	
+	void DrawSemiCircle(vector position, float radius, float width, float quality, float degree, unsigned long color)
+	{
+		float qty = (M_PI * 2) / quality;
+		auto  a = vector(position.x + radius * cos(6.28), position.y - radius * sin(6.28), position.z);
+		for (float theta = qty; theta <= (M_PI / 180) * degree; theta += qty)
+		{
+			auto b = vector(position.x + radius * cos(theta + 6.28), position.y - radius * sin(theta + 6.28), position.z);
+			draw_manager->add_line(a, b, color, width);
+			a = b;
+		}
+	}
+	
 	// Target Selector Helper
-
 	game_object_script GetSelectedTarget()
 	{
 		const auto& target = target_selector->get_selected_target();

@@ -304,7 +304,7 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 
 void PredictionHelper::OnDeleteObject(game_object_script object)
 {
-	auto emitterHash = object->get_emitter_resources_hash();
+	auto emitterHash = object->get_emitter_resources_hash();	
 
 	switch (emitterHash) {
 	case buff_hash("Yone_E_Beam"): {
