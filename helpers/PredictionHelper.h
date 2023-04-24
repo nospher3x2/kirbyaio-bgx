@@ -1,8 +1,5 @@
 #include "../plugin_sdk/plugin_sdk.hpp"
 
-// THANKS BREAKCODER FOR SPECIAL DASH DATABASE/LOGIC.
-// THANKS BREAKCODER FOR SPECIAL DASH DATABASE/LOGIC.
-// THANKS BREAKCODER FOR SPECIAL DASH DATABASE/LOGIC.
 struct SpecialDashData {
 	
 	vector startPosition;
@@ -39,7 +36,7 @@ public:
 	std::pair<bool, vector> GetCastPositionOnSpecialDash(script_spell* spell, SpecialDashData* dash, int maxCollisions = 1);
 	
 	bool HasSpecialBuff(game_object_script target);
-	bool CanCastOnSpecialBuff(script_spell* spell, game_object_script target, float extraDelay = 0.0f);
+	bool CanCastOnSpecialBuff(script_spell* spell, game_object_script target, float extraDelay = 0.0f, int maxCollisions = 1);
 	
 	std::pair<bool, vector> GetExpectedPosition(game_object_script enemy, float delay = 0.f);
 	
@@ -57,9 +54,15 @@ public:
 	void OnBuffLose(game_object_script object, buff_instance_script buff);
 private:
 	static std::unique_ptr<PredictionHelper> instance;
+	std::set<uint32_t> SPECIAL_BUFFS_HASH = {
+		buff_hash("ZhonyasRingShield"),
+		buff_hash("ChronoRevive"),
+		buff_hash("BardRStasis"),
+		buff_hash("LissandraRSelf")
+	};
 	
-	std::map<uint32_t, float> miaFor; // networkId, time
-	std::map<uint32_t, float> specialBuffs; // networkId, buffendPositionTime
+	std::map<uint32_t, float> miaTracker; // networkId, time
+	std::map<uint32_t, float> specialBuffs; // networkId, buffEndTime
 
 	std::map<uint32_t, std::shared_ptr<SpecialDashData>> specialDashs; // nameHash, data
 	game_object_script yoneShadowObject;

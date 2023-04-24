@@ -35,6 +35,7 @@ SpecialDashData* PredictionHelper::GetSpecialDash(game_object_script enemy, floa
 	return it != this->specialDashs.end() ? it->second.get() : nullptr;
 }
 
+
 bool PredictionHelper::CanCastOnSpecialDash(script_spell* spell, SpecialDashData* dash, float extraDelay)
 {
 	float travelTime = dash->castTime + dash->startPosition.distance(dash->endPosition) / dash->speed;
@@ -88,6 +89,36 @@ std::pair<bool, vector> PredictionHelper::GetCastPositionOnSpecialDash(script_sp
 	
 	return output;
 }
+	
+bool PredictionHelper::HasSpecialBuff(game_object_script object)
+{
+	if (this->specialBuffs[object->get_network_id()])
+	{
+		console->print("%s, buff: %f", object->get_name_cstr(), this->specialBuffs[object->get_network_id()]);
+	}
+
+	return this->specialBuffs[object->get_network_id()] > 0.f;
+}
+
+bool PredictionHelper::CanCastOnSpecialBuff(script_spell* spell, game_object_script object, float extraDelay, int maxCollisions)
+{
+	float delayToEnd = this->specialBuffs[object->get_network_id()] - gametime->get_time();
+	float maxDistance = (object->get_bounding_radius() + spell->get_radius()) / object->get_move_speed();
+	float timeToHit = fmax(0, (object->get_position().distance(myhero) - object->get_bounding_radius() - spell->get_radius())) / spell->get_speed() + ping->get_ping()/2000.f + spell->get_delay() + extraDelay;
+	float timeToCast = delayToEnd - timeToHit;
+
+	if (timeToCast + maxDistance > 0 && timeToCast <= 0) {
+		std::vector<game_object_script> collisions = spell->get_collision(myhero->get_position(), { object->get_position() });
+		const auto& collisionCount = std::count_if(collisions.begin(), collisions.end(), [&](game_object_script collision) {
+			return collision->get_network_id() != object->get_network_id();
+		});
+		
+		if (collisionCount <= maxCollisions)
+			return true;
+	}
+
+	return false;
+}
 
 std::pair<bool, vector> PredictionHelper::GetExpectedPosition(game_object_script object, float delay)
 {
@@ -100,14 +131,14 @@ void PredictionHelper::OnUpdate()
 
 void PredictionHelper::OnCreateObject(game_object_script object)
 {
-	auto emitter = object->get_emitter();
+	const auto& emitter = object->get_emitter();
 	if (!emitter || !emitter->is_ai_hero())
 		return;
 
-	auto emitterHash = object->get_emitter_resources_hash();
-	auto emitterPosition = emitter->get_position();
-	auto particlePosition = object->get_position();
-	auto target = object->get_particle_attachment_object();
+	const auto& emitterHash = object->get_emitter_resources_hash();
+	const auto& emitterPosition = emitter->get_position();
+	const auto& particlePosition = object->get_position();
+	const auto& target = object->get_particle_attachment_object();
 
 	switch (emitterHash)
 	{
@@ -183,7 +214,7 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 		prediction_input input;
 		input._from = particlePosition;
 		input.speed = FLT_MAX;
-		input.delay = realDelay - (ping->get_ping() / 1000.f) / 2; // AVOID PRED PING CALC
+		input.delay = realDelay - (ping->get_ping() / 2000.f); // AVOID PRED PING CALC
 		input.collision_objects = { collisionable_objects::allies };
 		input.range = 1000.f;
 		input.use_bounding_radius = true;
@@ -223,7 +254,6 @@ void PredictionHelper::OnCreateObject(game_object_script object)
 					});
 
 				const auto& distanceToLastTarget = alliesHitted.front().second;
-
 				endPosition = particlePosition + object->get_particle_rotation_forward().normalized() * (distanceToLastTarget + 200.f);
 			}
 		}
@@ -348,29 +378,55 @@ void PredictionHelper::OnProcessSpellCast(game_object_script sender, spell_insta
 	}
 }
 
-	void PredictionHelper::OnNetworkPacket(game_object_script sender, std::uint32_t network_id, pkttype_e type, void* args)
+void PredictionHelper::OnNetworkPacket(game_object_script sender, std::uint32_t network_id, pkttype_e type, void* args)
+{
+	if (type != pkttype_e::PKT_S2C_PlayAnimation_s || !sender) return;
+
+	const auto& data = (PKT_S2C_PlayAnimationArgs*)args;
+	if (!data) return;
+
+	if (!sender->is_ai_hero() || !sender->is_enemy()) 
+		return;
+
+	const auto& name = data->animation_name;
+	if (sender->get_champion() == champion_id::Yone && this->yoneShadowObject)
 	{
-		if (type != pkttype_e::PKT_S2C_PlayAnimation_s || !sender) return;
-
-		const auto& data = (PKT_S2C_PlayAnimationArgs*)args;
-		if (!data) return;
-
-		if (!sender->is_ai_hero() || !sender->is_enemy()) 
-			return;
-
-		const auto& name = data->animation_name;
-		if (sender->get_champion() == champion_id::Yone && this->yoneShadowObject)
+		if (this->yoneShadowObject->is_valid() && std::string(name) == ("Spell3_dash"))
 		{
-			if (this->yoneShadowObject->is_valid() && std::string(name) == ("Spell3_dash"))
-			{
-				this->specialDashs[spell_hash("YoneE")] = std::make_shared<SpecialDashData>(
-					sender->get_position(),
-					this->yoneShadowObject->get_position(),
-					3000.f,
-					0.25f - (ping->get_ping() / 1000.f),
-					gametime->get_time(),
-					sender
-				);
-			}
+			this->specialDashs[spell_hash("YoneE")] = std::make_shared<SpecialDashData>(
+				sender->get_position(),
+				this->yoneShadowObject->get_position(),
+				3000.f,
+				0.25f - (ping->get_ping() / 1000.f),
+				gametime->get_time(),
+				sender
+			);
 		}
 	}
+}
+
+void PredictionHelper::OnBuffGain(game_object_script sender, buff_instance_script buff)
+{
+	if (!sender->is_enemy())
+		return;
+
+	console->print("%s", buff->get_name_cstr());
+
+	if (this->SPECIAL_BUFFS_HASH.find(buff->get_hash_name()) != this->SPECIAL_BUFFS_HASH.end())
+	{
+		myhero->print_chat(0x1, "registrou a zhonyas amigao");
+		this->specialBuffs[sender->get_network_id()] = buff->get_remaining_time() + gametime->get_time();
+	}
+}
+
+void PredictionHelper::OnBuffLose(game_object_script sender, buff_instance_script buff)
+{
+	if (!sender->is_enemy())
+		return;
+
+	if (this->SPECIAL_BUFFS_HASH.find(buff->get_hash_name()) != this->SPECIAL_BUFFS_HASH.end())
+	{
+		myhero->print_chat(0x1, "removido");
+		this->specialBuffs[sender->get_network_id()] = 0;
+	}
+}

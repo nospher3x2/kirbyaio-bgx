@@ -5,12 +5,11 @@
 std::unique_ptr<Champion> champion = nullptr;
 bool Loader::Load()
 {
-
 	// Load the champion
-		champion = std::make_unique<Lux>();
 	switch (myhero->get_champion())
 	{
 	case champion_id::Lux:
+		champion = std::make_unique<Lux>();
 		break;
 	default:
 		console->print("[YessAIO] Champion not supported.");
@@ -42,8 +41,10 @@ void Loader::Callbacks::Register()
 	event_handler<events::on_create_object>::add_callback(OnCreateObject);
 	event_handler<events::on_delete_object>::add_callback(OnDeleteObject);
 	event_handler<events::on_buff_gain>::add_callback(OnBuffGain);
+	event_handler<events::on_buff_lose>::add_callback(OnBuffLose);
 	event_handler<events::on_process_spell_cast>::add_callback(OnProcessSpellCast);
 	event_handler<events::on_cast_spell>::add_callback(OnCastSpell);
+	event_handler<events::on_new_path>::add_callback(OnNewPath);
 	event_handler<events::on_network_packet>::add_callback(OnNetworkPacket);
 	antigapcloser::add_event_handler(OnGapcloser);
 }
@@ -56,8 +57,10 @@ void Loader::Callbacks::Remove()
 	event_handler<events::on_create_object>::remove_handler(OnCreateObject);
 	event_handler<events::on_delete_object>::remove_handler(OnDeleteObject);
 	event_handler<events::on_buff_gain>::remove_handler(OnBuffGain);
+	event_handler<events::on_buff_lose>::remove_handler(OnBuffLose);
 	event_handler<events::on_process_spell_cast>::remove_handler(OnProcessSpellCast);
 	event_handler<events::on_cast_spell>::remove_handler(OnCastSpell);
+	event_handler<events::on_new_path>::remove_handler(OnNewPath);
 	event_handler<events::on_network_packet>::remove_handler(OnNetworkPacket);
 	antigapcloser::remove_event_handler(OnGapcloser);
 }
@@ -92,7 +95,12 @@ void Loader::Callbacks::OnDeleteObject(game_object_script object)
 void Loader::Callbacks::OnBuffGain(game_object_script target, buff_instance_script buff)
 {
 	champion->OnBuffGain(target, buff);
-	//PredictionHelper::GetInstance()->OnBuffGain(target, buff);
+	PredictionHelper::GetInstance()->OnBuffGain(target, buff);
+}
+
+void Loader::Callbacks::OnBuffLose(game_object_script target, buff_instance_script buff)
+{
+	PredictionHelper::GetInstance()->OnBuffLose(target, buff);
 }
 
 void Loader::Callbacks::OnProcessSpellCast(game_object_script sender, spell_instance_script spell)
@@ -111,7 +119,18 @@ void Loader::Callbacks::OnNetworkPacket(game_object_script sender, std::uint32_t
 	PredictionHelper::GetInstance()->OnNetworkPacket(sender, network_id, type, args);
 }
 
+void Loader::Callbacks::OnNewPath(game_object_script sender, const std::vector<vector>& path, bool isDash, float dashSpeed)
+{
+	champion->OnNewPath(sender, path, isDash, dashSpeed);
+}
+
 void Loader::Callbacks::OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args)
 {
-	champion->OnGapcloser(sender, args);
+	if (!sender || !sender->is_valid() || !args)
+		return;
+	
+	if (!myhero->is_dead())
+	{
+		champion->OnGapcloser(sender, args);
+	}
 }

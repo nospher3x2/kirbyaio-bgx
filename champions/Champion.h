@@ -23,14 +23,14 @@ public:
 
 	virtual void OnProcessSpellCast(game_object_script sender, spell_instance_script spell);
 	virtual void OnCastSpell(spellslot slot, game_object_script target, vector& position, vector& position2, bool isCharge, bool* process);
+	virtual void OnNewPath(game_object_script sender, const std::vector<vector>& path, bool isDash, float dashSpeed);
 
 	virtual void OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args);
 
 
 protected:
 
-	static inline uint32_t immuneSpells[]
-	{
+	std::set<uint32_t> immuneSpells = {
 		spell_hash("EvelynnR"),
 		spell_hash("ZedR"),
 		spell_hash("EkkoR"),

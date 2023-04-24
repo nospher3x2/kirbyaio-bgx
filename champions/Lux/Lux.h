@@ -16,6 +16,7 @@ public:
 
 	void OnBuffGain(game_object_script object, buff_instance_script buff) override;
 	void OnProcessSpellCast(game_object_script sender, spell_instance_script spell) override;
+	void OnNewPath(game_object_script sender, const std::vector<vector>& path, bool isDash, float dashSpeed) override;
 
 	void OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args) override;
 	/*
@@ -23,7 +24,8 @@ public:
 	*/
 	int GetSingularityState();
 	bool HasPassive(game_object_script target);
-	bool IsDashable(game_object_script target);
+	bool IsInsideE(game_object_script target);
+	bool HasDashAvailable(game_object_script target, bool onlyBlink = false);
 
 	/*
 	* Logics
@@ -39,7 +41,8 @@ public:
 	void AutomaticCastE2(); // On Killable or if is leaving out E.
 	void AutomaticCastE2InPredict(); // Auto Attack and Ultimate
 	void AutomaticCastUltimate(); // In CC, OnKillable if On SpecialSkills/Zhonyas
-	void AutomaticCastOnSpecialDash();
+	void AutomaticCastOnSpecialDash(); // Full Combo on YoneR, YoneE etc
+	void AutomaticCastOnSpecialBuff(); // Full Combo on Statis
 
 
 	/*
@@ -53,8 +56,6 @@ public:
 	
 		
 protected:
-	std::vector<game_object_script> particles;
-	
 	struct {
 		game_object_script object;
 		vector position;
@@ -118,10 +119,12 @@ protected:
 		TreeEntry* use_e2_mode = nullptr;
 		TreeEntry* use_e2_in_predict = nullptr;
 		TreeEntry* use_e2_if_killable = nullptr;
-
+		TreeEntry* dont_e2_if_aa_range = nullptr;
+		TreeEntry* dont_e2_if_has_passive = nullptr;
+		TreeEntry* ignore_checks_if_leaving = nullptr;
+		
 		TreeEntry* use_r_if_killable = nullptr;
 		TreeEntry* use_r_on_cc = nullptr;
-		TreeEntry* use_r_on_special_skills = nullptr;
 		TreeEntry* use_r_on_special_items = nullptr;
 	} automatic;
 

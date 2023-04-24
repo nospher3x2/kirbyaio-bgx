@@ -41,6 +41,10 @@ void Champion::OnCastSpell(spellslot slot, game_object_script target, vector& po
 	
 }
 
+void Champion::OnNewPath(game_object_script sender, const std::vector<vector>& path, bool isDash, float dashSpeed)
+{
+}
+
 void Champion::OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args)
 {
 }
