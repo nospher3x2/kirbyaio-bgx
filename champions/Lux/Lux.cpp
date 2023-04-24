@@ -67,7 +67,15 @@ void Lux::Load()
 	
 	auto const harass = this->main->add_tab("harass", "Harass");
 	{
-		
+		harass->add_separator("q","[Q] Settings");
+		{
+			this->harass.use_q = harass->add_checkbox("use_q", "Use Q", true);
+		}
+
+		harass->add_separator("e", "[E] Settings");
+		{
+			this->harass.use_e = harass->add_checkbox("use_e", "Use E", true);
+		}
 	}
 	
 	auto const automatic = this->main->add_tab("automatic", "Automatic");
@@ -115,6 +123,7 @@ void Lux::Load()
 				this->automatic.use_e2_mode = automatic->add_combobox("use_e2_mode", "Use E2 Mode", { {"Enemy is Leaving", nullptr},{"Enemy is Inside", nullptr}, {"Always", nullptr} }, 0);
 				this->automatic.use_e2_in_predict = automatic->add_checkbox("use_e2_in_predict", "Use E2 in A.A/Ultimate Predict", true);
 				this->automatic.use_e2_if_killable = automatic->add_checkbox("use_e2_if_killable", "Use E2 if Killable", true);
+				this->automatic.use_e2_if_no_enemy_inside = automatic->add_checkbox("use_e2_if_no_enemy_inside", "Use E2 if no enemy is inside", false);
 				this->automatic.dont_e2_if_aa_range = automatic->add_checkbox("dont_e2_if_aa_range", "Dont E2 if enemy in AA Range", true);
 				this->automatic.dont_e2_if_has_passive = automatic->add_checkbox("dont_e2_if_has_passive", "Dont E2 if enemy has Passive", true);
 				this->automatic.ignore_checks_if_leaving = automatic->add_checkbox("ignore_checks_if_leaving", " ^~ Ignore Checks if enemy is Leaving", true);
@@ -133,7 +142,7 @@ void Lux::Load()
 	{
 		hitchance->add_separator("spells", "Spells Hitchance");
 		{
-			this->hitchance.q = hitchance->add_combobox("q", "Q Hitchance", { {"Low",nullptr},{"Medium",nullptr },{"High", nullptr},{"Very High",nullptr} }, 2);
+			this->hitchance.q = hitchance->add_combobox("q", "Q Hitchance", { {"Low",nullptr},{"Medium",nullptr },{"High", nullptr},{"Very High",nullptr} }, 3);
 			this->hitchance.e = hitchance->add_combobox("e", "E Hitchance", { {"Low",nullptr},{"Medium",nullptr },{"High", nullptr},{"Very High",nullptr} }, 2);
 			this->hitchance.r = hitchance->add_combobox("r", "R Hitchance", { {"Low",nullptr},{"Medium",nullptr },{"High", nullptr},{"Very High",nullptr} }, 2);
 		}
@@ -145,9 +154,9 @@ void Lux::Load()
 		}
 	}
 	
-	auto const renderer = this->main->add_tab("renderer", "Renderer");
+	const auto& renderer = this->main->add_tab("renderer", "Renderer");
 	{
-		auto const spells = renderer->add_tab("spells", "Spells Range");
+		const auto& spells = renderer->add_tab("spells", "Spells Range");
 		{
 			float Q_DEFAULT_COLOR[] = { 255.f, 255.f, 255.f, 255.f };
 			
@@ -171,14 +180,14 @@ void Lux::Load()
 			this->renderer.spells.r_minimap_color = spells->add_colorpick("r2_color", " ^~ Color", R2_DEFAULT_COLOR);
 		}
 
-		auto const damage = renderer->add_tab("damage", "Damage Indicator");
+		const auto& damage = renderer->add_tab("damage", "Damage Indicator");
 		{
 			float DEFAULT_COLOR[] = { 255.f, 255.f, 255.f, 255.f };
 			this->renderer.damage.enabled = damage->add_checkbox("enabled", "Should Draw Damage Indicator", true);
 			this->renderer.damage.color = damage->add_colorpick("color", " ^~ Color", DEFAULT_COLOR);
 		}
 
-		auto const misc = renderer->add_tab("misc", "Misc");
+		const auto& misc = renderer->add_tab("misc", "Misc");
 		{
 			this->renderer.misc.draw_killable = misc->add_checkbox("draw_killable", "Draw Killable Warning", true);
 			this->renderer.misc.draw_ignoring_dash = misc->add_checkbox("draw_ignoring_dash", "Draw Ignoring Dash", true);
@@ -285,7 +294,10 @@ void Lux::OnUpdate()
 
 	if (orbwalker->harass())
 	{
-		//if (this->harass.use_e->get_bool())
+		if (this->harass.use_q->get_bool())
+			this->CastQ();
+		
+		if (this->harass.use_e->get_bool())
 			this->CastE();
 	}
 }
@@ -514,7 +526,36 @@ void Lux::OnProcessSpellCast(game_object_script sender, spell_instance_script sp
 
 void Lux::OnNewPath(game_object_script sender, const std::vector<vector>& path, bool isDash, float dashSpeed)
 {
+	if (!sender->is_ai_hero() || !sender->is_enemy() || sender->is_dead()) return;
+	if (!isDash || dashSpeed <= 0) return;
 	
+	if (!this->automatic.use_q_on_dash->get_bool()) return;
+
+	vector startPath = path.front();
+	vector endPath = path.back();
+
+	float myDistanceToEnd = myhero->get_distance(endPath);
+	if (myDistanceToEnd > this->spells.q->range()) return;
+
+	float dashDistance = startPath.distance(endPath);
+	float maxDistance = (this->spells.q->get_radius() + sender->get_bounding_radius()) / sender->get_move_speed();
+	float timeToEnd = dashDistance / dashSpeed;
+
+	float timeToHit = this->spells.q->get_delay() + (ping->get_ping()/2000.f) + fmax(0, myhero->get_distance(endPath) - this->spells.q->get_radius() - sender->get_bounding_radius()) / this->spells.q->get_speed();
+	float waitTime = timeToEnd - timeToHit;
+	if (waitTime + maxDistance > 0) {
+		scheduler->delay_action(waitTime, [&]() {
+			const auto& colisions = this->spells.w->get_collision(myhero->get_position(), { endPath });
+			const auto& collisionCount = std::count_if(colisions.begin(), colisions.end(), [&](game_object_script object) {
+				return object->get_network_id() != sender->get_network_id();
+			});
+
+			if (collisionCount <= 2 && myhero->get_distance(endPath) <= this->spells.q->range())
+			{
+				if (this->spells.q->cast(endPath)) return;
+			}
+		});
+	}
 }
 
 void Lux::OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args)
@@ -532,16 +573,27 @@ void Lux::OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_ar
 	if (this->automatic.use_q_anti_gapclose->get_bool() && !args->is_unstoppable && args->end_position.distance(myhero->get_position()) <= this->spells.q->range() + sender->get_bounding_radius())
 	{
 		const auto& senderEnabled = this->automatic.use_q_anti_gapclose_whitelist.find(sender->get_network_id());
-		if (senderEnabled != this->automatic.use_q_anti_gapclose_whitelist.end() && senderEnabled->second->get_bool())
+		if (senderEnabled != this->automatic.use_e_anti_gapclose_whitelist.end() && senderEnabled->second->get_bool())
 		{
-			const auto& willReachAt = args->start_time + args->end_position.distance(myhero->get_position()) / args->speed;
-			const auto& travelTime = gametime->get_time() + this->spells.q->get_delay() +
-				myhero->get_position().distance(args->end_position) / this->spells.q->get_speed();
+			const float& dashDistance = args->start_position.distance(args->end_position);
+			const float& maxDistance = (this->spells.q->get_radius() + sender->get_bounding_radius()) / sender->get_move_speed();
+			const float& timeToEnd = dashDistance / args->speed;
+			const float& timeToHit = this->spells.q->get_delay() + (ping->get_ping()/2000.f) + fmax(0, myhero->get_distance(args->end_position) - this->spells.q->get_radius() - sender->get_bounding_radius()) / this->spells.q->get_speed();
+			const float& waitTime = timeToEnd - timeToHit;
+			
+			const auto& endPath = args->end_position;
+			if (waitTime + maxDistance > 0) {
+				scheduler->delay_action(waitTime, [&]() {
+					const auto& colisions = this->spells.w->get_collision(myhero->get_position(), { endPath });
+					const auto& collisionCount = std::count_if(colisions.begin(), colisions.end(), [&](game_object_script object) {
+						return object->get_network_id() != sender->get_network_id();
+					});
 
-			const auto& diff = travelTime - willReachAt;
-			if (diff > 0.25f && this->spells.q->cast(args->end_position))
-			{
-				myhero->print_chat(0x1, "Q on Gapcloser");
+					if (collisionCount <= 2 && myhero->get_distance(endPath) <= this->spells.q->range())
+					{
+						if (this->spells.q->cast(endPath)) return;
+					}
+				});
 			}
 		}
 	}
@@ -698,7 +750,7 @@ void Lux::AutomaticCastQ()
 	if (!this->spells.q->is_ready())
 		return;
 	
-	const auto& enemies = this->GetTargets(this->spells.q->range() + 200.f);
+	const auto& enemies = this->GetTargets(this->spells.q->range());
 	if (enemies.size() <= 0)
 		return;
 
@@ -717,12 +769,6 @@ void Lux::AutomaticCastQ()
 			{
 				myhero->print_chat(0x1, "anti melee");
 			}
-			return;
-		}
-		
-		if (this->automatic.use_q_on_dash->get_bool() && output.hitchance >= hit_chance::dashing)
-		{
-			this->spells.q->cast(output.get_cast_position());
 			return;
 		}
 	}
@@ -762,7 +808,14 @@ void Lux::AutomaticCastE2()
 	});
 
 	if (enemies.size() <= 0)
+	{
+		if (this->automatic.use_e2_if_no_enemy_inside->get_bool())
+		{
+			this->spells.e->cast();
+		}
+		
 		return;
+	}
 
 	for (const auto& enemy : enemies)
 	{
@@ -941,7 +994,7 @@ void Lux::AutomaticCastOnSpecialDash()
 void Lux::AutomaticCastOnSpecialBuff()
 {
 	for (const auto& enemy : entitylist->get_enemy_heroes())
-	{
+	{	
 		if (!enemy || !enemy->is_valid() || enemy->get_position().distance(myhero->get_position()) > this->spells.q->range())
 			continue;
 

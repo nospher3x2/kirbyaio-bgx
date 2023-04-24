@@ -99,8 +99,12 @@ protected:
 		std::map<uint32_t, TreeEntry*> w_incoming_damage_whitelist;
 		
 		TreeEntry* use_e = nullptr;
-		TreeEntry* use_r = nullptr;
 	} combo;
+
+	struct {
+		TreeEntry* use_q = nullptr;
+		TreeEntry* use_e = nullptr;
+	} harass;
 
 	struct {
 		TreeEntry* use_q_on_dash = nullptr;
@@ -119,6 +123,7 @@ protected:
 		TreeEntry* use_e2_mode = nullptr;
 		TreeEntry* use_e2_in_predict = nullptr;
 		TreeEntry* use_e2_if_killable = nullptr;
+		TreeEntry* use_e2_if_no_enemy_inside = nullptr;
 		TreeEntry* dont_e2_if_aa_range = nullptr;
 		TreeEntry* dont_e2_if_has_passive = nullptr;
 		TreeEntry* ignore_checks_if_leaving = nullptr;
