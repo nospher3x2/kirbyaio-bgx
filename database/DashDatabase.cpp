@@ -184,7 +184,7 @@ namespace DashDatabase
 
 		// Vladimir
 		dashs.insert({ champion_id::Vladimir, {
-			{ "[W] Sanguine Pool", spellslot::w, DashType::Blink, true }
+			{ "[W] Sanguine Pool", spellslot::w, DashType::Blink, false }
 		} });
 
 		//for (const auto& hero : entitylist->get_all_heroes())

@@ -72,7 +72,7 @@ protected:
 			const auto& isCastingImmortilitySpell = activeSpell && std::any_of(
 				std::begin(this->immuneSpells),
 				std::end(this->immuneSpells),
-				[&](uint32_t spellHash) {
+				[activeSpell](uint32_t spellHash) {
 					return activeSpell->get_spell_data()->get_name_hash() == spellHash;
 				});
 
@@ -170,7 +170,7 @@ protected:
 	// Target Selector Helper
 	game_object_script GetSelectedTarget()
 	{
-		const auto& target = target_selector->get_selected_target();
+		const auto target = target_selector->get_selected_target();
 		if (!this->IsValidCustom(target))
 			return nullptr;
 		
@@ -183,8 +183,8 @@ protected:
 	
 	game_object_script GetTarget(float range, damage_type type, std::function<bool(game_object_script target)> validation = [](game_object_script target) { return true;  })
 	{
-		const auto& selectedTarget = this->GetSelectedTarget();
-		if (selectedTarget && validation(selectedTarget)) {
+		const auto selectedTarget = this->GetSelectedTarget();
+		if (selectedTarget && selectedTarget->is_valid() && validation(selectedTarget)) {
 			return selectedTarget;
 		}
 		
@@ -209,10 +209,14 @@ protected:
 
 	std::pair<game_object_script, prediction_output> GetTarget(script_spell* spell, damage_type type, hit_chance hitchance, std::function<bool(game_object_script target)>validation = [](game_object_script target) { return true;  })
 	{
-		const auto& selectedTarget = this->GetSelectedTarget();
-		if (selectedTarget) {
+		const auto selectedTarget = this->GetSelectedTarget();
+		if (selectedTarget && selectedTarget->is_valid() && validation(selectedTarget))
+		{
 			return std::make_pair(selectedTarget, spell->get_prediction(selectedTarget));
 		}
+
+		if (!spell)
+			return std::make_pair(nullptr, prediction_output());
 		
 		std::vector<std::pair<game_object_script, prediction_output>> targets = {};
 		std::vector<game_object_script> enemies = {};
@@ -238,10 +242,14 @@ protected:
 
 		if (targets.empty()) return { nullptr, prediction_output() };
 
-		const auto& target = target_selector->get_target(enemies, type);
-		return *std::find_if(targets.begin(), targets.end(), [target](const std::pair<game_object_script, prediction_output>& pair) {
+		const auto target = target_selector->get_target(enemies, type);
+		const auto it = std::find_if(targets.begin(), targets.end(), [target](const std::pair<game_object_script, prediction_output>& pair) {
 			return pair.first == target;
 		});
+
+		if (it == targets.end()) return { nullptr, prediction_output() };
+		
+		return *it;
 	}
 	
 	std::vector<game_object_script> GetTargets(float range, std::function<bool(game_object_script target)> validation = [](game_object_script target) { return true;  })

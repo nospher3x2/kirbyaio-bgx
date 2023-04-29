@@ -268,7 +268,7 @@ void Lux::OnUpdate()
 	if (this->hotkeys.semi_r->get_bool())
 		this->SemiCastR();
 
-	if (this->e_data.object->is_valid() && this->spells.e->is_ready())
+	if (this->automatic.use_e2->get_bool() && this->e_data.object->is_valid() && this->spells.e->is_ready())
 	{
 		this->AutomaticCastE2();
 		this->AutomaticCastE2InPredict();
@@ -513,7 +513,7 @@ void Lux::OnProcessSpellCast(game_object_script sender, spell_instance_script sp
 		if (this->spells.w->is_ready())
 		{
 			const auto& position = spell->get_end_position();
-			scheduler->delay_action(0.1f + ping->get_ping() / 1000 + (1.f / 30.f), [this, position]() {
+			scheduler->delay_action(0.2f + ping->get_ping() / 1000 + (1.f / 15.f), [this, position]() {
 				if (myhero->get_mana_percent() >= this->combo.invisible_q_mana->get_int())
 				{
 					this->spells.w->cast(position);
@@ -561,7 +561,9 @@ void Lux::OnNewPath(game_object_script sender, const std::vector<vector>& path, 
 void Lux::OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_args* args)
 {
 	const auto& E_RANGE = this->spells.e->range() + this->spells.e->get_radius();
-	if (this->automatic.use_e_anti_gapclose->get_bool() && args->end_position.distance(myhero->get_position()) <= E_RANGE)
+	const auto& IN_Q_RANGE = args->end_position.distance(myhero->get_position()) <= this->spells.q->range() + this->spells.q->get_radius();
+	
+	if (this->automatic.use_e_anti_gapclose->get_bool() && !IN_Q_RANGE && args->end_position.distance(myhero->get_position()) <= E_RANGE)
 	{
 		const auto& senderEnabled = this->automatic.use_e_anti_gapclose_whitelist.find(sender->get_network_id());
 		if (senderEnabled != this->automatic.use_e_anti_gapclose_whitelist.end() && senderEnabled->second->get_bool())
@@ -570,7 +572,7 @@ void Lux::OnGapcloser(game_object_script sender, antigapcloser::antigapcloser_ar
 		}
 	}
 
-	if (this->automatic.use_q_anti_gapclose->get_bool() && !args->is_unstoppable && args->end_position.distance(myhero->get_position()) <= this->spells.q->range() + sender->get_bounding_radius())
+	if (this->automatic.use_q_anti_gapclose->get_bool() && !args->is_unstoppable && IN_Q_RANGE)
 	{
 		const auto& senderEnabled = this->automatic.use_q_anti_gapclose_whitelist.find(sender->get_network_id());
 		if (senderEnabled != this->automatic.use_e_anti_gapclose_whitelist.end() && senderEnabled->second->get_bool())
@@ -703,7 +705,7 @@ bool Lux::CastE()
 
 	if (this->GetSingularityState() == 0)
 	{
-		const auto& prediction_target = this->GetTarget(this->spells.e, damage_type::magical, hit_chance::low);
+		const auto prediction_target = this->GetTarget(this->spells.e, damage_type::magical, hit_chance::low);
 		if (!prediction_target.first || !prediction_target.first->is_valid())
 			return false;
 
@@ -803,7 +805,7 @@ void Lux::AutomaticCastE2()
 	if (E2_MODE == 2 && this->spells.e->cast()) // Always Cast
 		return;
 
-	const auto& enemies = this->GetTargets(FLT_MAX, [&](game_object_script target) {
+	const auto& enemies = this->GetTargets(FLT_MAX, [this](game_object_script target) {
 		return this->e_data.circle.is_inside(target->get_position());
 	});
 
